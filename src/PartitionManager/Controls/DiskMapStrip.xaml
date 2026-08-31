@@ -1,0 +1,90 @@
+<UserControl x:Class="PartitionManager.Controls.DiskMapStrip"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:converters="clr-namespace:PartitionManager.Converters"
+             SnapsToDevicePixels="True"
+             UseLayoutRounding="True"
+             ClipToBounds="True">
+    <UserControl.Resources>
+        <converters:PartitionFillConverter x:Key="PartitionFill"/>
+        <converters:UsedPercentToGridLengthConverter x:Key="UsedStar"/>
+        <converters:RemainingPercentToGridLengthConverter x:Key="FreeStar"/>
+
+        <DataTemplate x:Key="SegmentBar">
+            <Button Command="{Binding DataContext.SelectSegmentCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                    CommandParameter="{Binding}"
+                    Tag="{Binding DataContext, RelativeSource={RelativeSource AncestorType=Window}}"
+                    ToolTip="{Binding MapToolTip}"
+                    Padding="0" Margin="0" MinWidth="0" MinHeight="0"
+                    BorderThickness="0"
+                    HorizontalAlignment="Stretch"
+                    VerticalAlignment="Stretch"
+                    HorizontalContentAlignment="Stretch"
+                    VerticalContentAlignment="Stretch"
+                    Cursor="Hand"
+                    FocusVisualStyle="{x:Null}"
+                    PreviewMouseRightButtonDown="Segment_PreviewMouseRightButtonDown">
+                <Button.ContextMenu>
+                    <ContextMenu DataContext="{Binding PlacementTarget.Tag, RelativeSource={RelativeSource Self}}">
+                        <MenuItem Header="Resize / extend" Command="{Binding ResizePartitionCommand}"/>
+                        <MenuItem Header="Create partition" Command="{Binding CreatePartitionCommand}"/>
+                        <MenuItem Header="Delete partition" Command="{Binding DeletePartitionCommand}"/>
+                        <MenuItem Header="Format partition" Command="{Binding FormatPartitionCommand}"/>
+                        <Separator/>
+                        <MenuItem Header="Change drive letter" Command="{Binding ChangeDriveLetterCommand}"/>
+                        <MenuItem Header="Change label" Command="{Binding ChangeLabelCommand}"/>
+                        <MenuItem Header="{Binding HideHeader}" Command="{Binding HidePartitionCommand}"/>
+                        <MenuItem Header="Set active" Command="{Binding SetActiveCommand}"/>
+                        <Separator/>
+                        <MenuItem Header="Check partition" Command="{Binding CheckPartitionCommand}"/>
+                        <MenuItem Header="Properties" Command="{Binding PartitionPropertiesCommand}"/>
+                    </ContextMenu>
+                </Button.ContextMenu>
+                <Button.Template>
+                    <ControlTemplate TargetType="Button">
+                        <Grid ClipToBounds="True" SnapsToDevicePixels="True">
+                            <Border Background="{Binding Kind, Converter={StaticResource PartitionFill}}"/>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="{Binding UsedPercent, Mode=OneWay, Converter={StaticResource UsedStar}}"/>
+                                    <ColumnDefinition Width="{Binding UsedPercent, Mode=OneWay, Converter={StaticResource FreeStar}}"/>
+                                </Grid.ColumnDefinitions>
+                                <Border Grid.Column="0" Background="#33000000"
+                                        Visibility="{Binding IsUnallocated, Converter={StaticResource InverseBoolToVisibility}}"/>
+                                <StackPanel Grid.ColumnSpan="2" VerticalAlignment="Center" Margin="4,0">
+                                    <TextBlock Text="{Binding MapCaption}"
+                                               Foreground="White" FontSize="11" FontWeight="SemiBold"
+                                               HorizontalAlignment="Center"
+                                               TextTrimming="CharacterEllipsis"
+                                               TextAlignment="Center"/>
+                                    <TextBlock Text="{Binding MapSizeText}"
+                                               Foreground="#EEFFFFFF" FontSize="10"
+                                               HorizontalAlignment="Center"
+                                               TextTrimming="CharacterEllipsis"
+                                               TextAlignment="Center"/>
+                                </StackPanel>
+                            </Grid>
+                            <Rectangle Width="1" HorizontalAlignment="Right"
+                                       Fill="#66000000" IsHitTestVisible="False"/>
+                            <Border x:Name="Sel"
+                                    BorderBrush="{DynamicResource AccentBrush}"
+                                    BorderThickness="2"
+                                    Background="Transparent"
+                                    Margin="0"
+                                    IsHitTestVisible="False"
+                                    Visibility="Collapsed"
+                                    SnapsToDevicePixels="True"/>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                                <Setter TargetName="Sel" Property="Visibility" Value="Visible"/>
+                            </DataTrigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Button.Template>
+            </Button>
+        </DataTemplate>
+    </UserControl.Resources>
+
+    <Grid x:Name="Host" ClipToBounds="True" SnapsToDevicePixels="True" UseLayoutRounding="True"/>
+</UserControl>

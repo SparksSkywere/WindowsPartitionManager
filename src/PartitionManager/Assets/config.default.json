@@ -1,0 +1,16 @@
+{
+  "general": {
+    "theme": "system",
+    "refreshOnLaunch": true
+  },
+  "display": {
+    "showRemovable": true,
+    "showVirtual": false,
+    "showUnallocated": true,
+    "showSystemReserved": true
+  },
+  "safety": {
+    "confirmDestructive": true,
+    "protectSystemPartitions": true
+  }
+}

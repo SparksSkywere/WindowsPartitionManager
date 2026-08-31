@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Burn Setup.exe bootstrapper for Partition Manager.
+
+  Displays the chained MSI UI (FeatureTree) so users can:
+  - Choose install folder
+  - Toggle Desktop shortcut (and other features)
+  - See Start Menu shortcuts (always installed with the main feature)
+
+  InstallFolder is Type=formatted so [ProgramFiles64Folder] expands correctly.
+  Bundle UpgradeCode is stable: installing a newer Setup.exe uninstalls the previous bundle.
+  The chained MSI MajorUpgrade also removes any prior MSI registration (same UpgradeCode).
+-->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:bal="http://wixtoolset.org/schemas/v4/wxs/bal">
+
+  <Bundle Name="Partition Manager"
+          Version="1.0.0"
+          Manufacturer="Skywere Industries"
+          UpgradeCode="A3C7D825-1F4E-48B9-9D60-2E8A4B5C7D91"
+          Copyright="Copyright (c) Skywere Industries"
+          IconSourceFile="..\..\..\assets\installer.ico"
+          DisableModify="yes"
+          DisableRemove="no">
+
+    <Variable Name="InstallFolder"
+              Type="formatted"
+              Value="[ProgramFiles64Folder]PartitionManager\"
+              bal:Overridable="yes" />
+
+    <BootstrapperApplication>
+      <bal:WixStandardBootstrapperApplication
+          LicenseUrl="https://opensource.org/licenses/MIT"
+          Theme="hyperlinkLicense"
+          SuppressOptionsUI="yes"
+          SuppressDowngradeFailure="no"
+          ShowVersion="yes" />
+    </BootstrapperApplication>
+
+    <Chain DisableSystemRestore="no">
+      <!--
+        WiX v4/v5: use bal:DisplayInternalUICondition (DisplayInternalUI attribute removed).
+        WixBundleAction = 6 means Install — show MSI FeatureTree (folder + Desktop shortcut).
+        Hide MSI UI on uninstall/repair so Apps & features stays clean.
+      -->
+      <MsiPackage Id="PartitionManagerMsi"
+                  SourceFile="$(var.PartitionManager.Installer.TargetPath)"
+                  DisplayName="Partition Manager"
+                  Visible="yes"
+                  Compressed="yes"
+                  Vital="yes"
+                  Permanent="no"
+                  ForcePerMachine="yes"
+                  bal:DisplayInternalUICondition="WixBundleAction = 6">
+        <MsiProperty Name="ARPSYSTEMCOMPONENT" Value="0" />
+      </MsiPackage>
+    </Chain>
+  </Bundle>
+</Wix>

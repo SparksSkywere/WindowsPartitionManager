@@ -1,0 +1,476 @@
+<Window x:Class="PartitionManager.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="clr-namespace:PartitionManager.Controls"
+        xmlns:converters="clr-namespace:PartitionManager.Converters"
+        Title="Partition Manager"
+        Height="780" Width="1280"
+        MinHeight="560" MinWidth="1020"
+        WindowStartupLocation="CenterScreen"
+        Background="{DynamicResource WindowBackgroundBrush}"
+        Foreground="{DynamicResource PrimaryTextBrush}"
+        Icon="pack://application:,,,/Assets/app.ico">
+
+    <Window.InputBindings>
+        <KeyBinding Key="F5" Command="{Binding RefreshCommand}"/>
+        <KeyBinding Key="Enter" Modifiers="Control" Command="{Binding ApplyCommand}"/>
+        <KeyBinding Key="Z" Modifiers="Control" Command="{Binding UndoLastCommand}"/>
+        <KeyBinding Key="Escape" Command="{Binding CancelCommand}"/>
+    </Window.InputBindings>
+
+    <Window.Resources>
+        <converters:PartitionFillConverter x:Key="PartitionFill"/>
+        <converters:UsedPercentToGridLengthConverter x:Key="UsedStar"/>
+        <converters:RemainingPercentToGridLengthConverter x:Key="FreeStar"/>
+    </Window.Resources>
+
+    <DockPanel Background="{DynamicResource WindowBackgroundBrush}">
+        <Menu DockPanel.Dock="Top">
+            <MenuItem Header="_File">
+                <MenuItem Header="_Refresh" InputGestureText="F5" Command="{Binding RefreshCommand}"/>
+                <MenuItem Header="_Apply" InputGestureText="Ctrl+Enter" Command="{Binding ApplyCommand}"/>
+                <Separator/>
+                <MenuItem Header="Open _config folder" Command="{Binding OpenConfigFolderCommand}"/>
+                <Separator/>
+                <MenuItem Header="E_xit" Click="Exit_Click"/>
+            </MenuItem>
+            <MenuItem Header="_Partition">
+                <MenuItem Header="_Resize / extend" Command="{Binding ResizePartitionCommand}"/>
+                <MenuItem Header="_Create" Command="{Binding CreatePartitionCommand}"/>
+                <MenuItem Header="_Delete" Command="{Binding DeletePartitionCommand}"/>
+                <MenuItem Header="_Format" Command="{Binding FormatPartitionCommand}"/>
+                <Separator/>
+                <MenuItem Header="Change drive _letter" Command="{Binding ChangeDriveLetterCommand}"/>
+                <MenuItem Header="Change _label" Command="{Binding ChangeLabelCommand}"/>
+                <MenuItem Header="{Binding HideHeader}" Command="{Binding HidePartitionCommand}"/>
+                <MenuItem Header="Set _active" Command="{Binding SetActiveCommand}"/>
+                <Separator/>
+                <MenuItem Header="C_heck" Command="{Binding CheckPartitionCommand}"/>
+                <MenuItem Header="_Properties" Command="{Binding PartitionPropertiesCommand}"/>
+            </MenuItem>
+            <MenuItem Header="_Disk">
+                <MenuItem Header="_Initialize" Command="{Binding InitializeDiskCommand}"/>
+                <MenuItem Header="{Binding ConvertHeader}" Command="{Binding ConvertStyleCommand}"/>
+                <MenuItem Header="Delete _all partitions" Command="{Binding DeleteAllPartitionsCommand}"/>
+                <MenuItem Header="{Binding OnlineHeader}" Command="{Binding ToggleOnlineCommand}"/>
+                <Separator/>
+                <MenuItem Header="_Properties" Command="{Binding DiskPropertiesCommand}"/>
+            </MenuItem>
+            <MenuItem Header="_View">
+                <MenuItem Header="Clear _log" Command="{Binding ClearLogCommand}"/>
+            </MenuItem>
+            <MenuItem Header="_Tools">
+                <MenuItem Header="_Undo last pending" InputGestureText="Ctrl+Z" Command="{Binding UndoLastCommand}"/>
+                <MenuItem Header="_Discard pending" Command="{Binding DiscardPendingCommand}"/>
+                <Separator/>
+                <MenuItem Header="_Options..." Click="Options_Click"/>
+            </MenuItem>
+            <MenuItem Header="_Help">
+                <MenuItem Header="Send _feedback on GitHub…" Click="Feedback_Click"/>
+                <MenuItem Header="Open Git_Hub repository…" Click="GitHub_Click"/>
+                <MenuItem Header="View _releases…" Click="Releases_Click"/>
+                <Separator/>
+                <MenuItem Header="_About Partition Manager" Click="About_Click"/>
+            </MenuItem>
+        </Menu>
+
+        <Border DockPanel.Dock="Top" Background="{DynamicResource PanelBackgroundBrush}"
+                BorderBrush="{DynamicResource BorderBrushSubtle}" BorderThickness="0,0,0,1" Padding="6,4">
+            <DockPanel>
+                <StackPanel Orientation="Horizontal" DockPanel.Dock="Left">
+                    <Button Content="Refresh" Style="{StaticResource ToolbarButtonStyle}"
+                            Command="{Binding RefreshCommand}" ToolTip="Reload disks (F5)"/>
+                    <Button Content="Apply" Style="{StaticResource PrimaryButtonStyle}"
+                            Command="{Binding ApplyCommand}" ToolTip="Commit pending operations (Ctrl+Enter)"/>
+                    <Button Content="Undo" Style="{StaticResource ToolbarButtonStyle}"
+                            Command="{Binding UndoLastCommand}" ToolTip="Undo last pending operation (Ctrl+Z)"/>
+                    <Rectangle Width="1" Fill="{DynamicResource BorderBrushSubtle}" Margin="8,4"/>
+                    <Button Content="Resize" Style="{StaticResource ToolbarButtonStyle}"
+                            Command="{Binding ResizePartitionCommand}"/>
+                    <Button Content="Create" Style="{StaticResource ToolbarButtonStyle}"
+                            Command="{Binding CreatePartitionCommand}"/>
+                    <Button Content="Delete" Style="{StaticResource ToolbarButtonStyle}"
+                            Command="{Binding DeletePartitionCommand}"/>
+                    <Button Content="Format" Style="{StaticResource ToolbarButtonStyle}"
+                            Command="{Binding FormatPartitionCommand}"/>
+                    <Rectangle Width="1" Fill="{DynamicResource BorderBrushSubtle}" Margin="8,4"/>
+                    <Button Content="Options" Style="{StaticResource ToolbarButtonStyle}"
+                            Click="Options_Click"/>
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" DockPanel.Dock="Right" HorizontalAlignment="Right">
+                    <TextBlock Text="Filter:" VerticalAlignment="Center" Margin="0,0,6,0"
+                               Style="{StaticResource MutedTextStyle}"/>
+                    <TextBox Width="180" VerticalAlignment="Center"
+                             Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
+                             ToolTip="Filter partitions by letter, label, file system, or disk"/>
+                </StackPanel>
+            </DockPanel>
+        </Border>
+
+        <Border DockPanel.Dock="Top" Padding="10,6"
+                Background="{DynamicResource AccentBrush}"
+                Visibility="{Binding IsElevated, Converter={StaticResource InverseBoolToVisibility}}">
+            <TextBlock Text="{Binding ElevationBanner}" Foreground="{DynamicResource OnAccentTextBrush}"
+                       TextWrapping="Wrap"/>
+        </Border>
+
+        <StatusBar DockPanel.Dock="Bottom">
+            <StatusBarItem>
+                <StackPanel Orientation="Horizontal">
+                    <Grid Width="16" Height="16" Margin="0,0,8,0"
+                          Visibility="{Binding IsBusy, Converter={StaticResource BoolToVisibility}}">
+                        <Ellipse Width="14" Height="14" Stroke="{DynamicResource AccentBrush}" StrokeThickness="2"
+                                 StrokeDashArray="2.5 1.5" RenderTransformOrigin="0.5,0.5">
+                            <Ellipse.RenderTransform>
+                                <RotateTransform/>
+                            </Ellipse.RenderTransform>
+                            <Ellipse.Triggers>
+                                <EventTrigger RoutedEvent="Loaded">
+                                    <BeginStoryboard>
+                                        <Storyboard RepeatBehavior="Forever">
+                                            <DoubleAnimation Storyboard.TargetProperty="(Ellipse.RenderTransform).(RotateTransform.Angle)"
+                                                             From="0" To="360" Duration="0:0:0.9"/>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </EventTrigger>
+                            </Ellipse.Triggers>
+                        </Ellipse>
+                    </Grid>
+                    <TextBlock Text="{Binding StatusText}" MinWidth="200" VerticalAlignment="Center"/>
+                </StackPanel>
+            </StatusBarItem>
+            <Separator/>
+            <StatusBarItem>
+                <TextBlock Text="{Binding SummaryText}" Style="{StaticResource MutedTextStyle}"/>
+            </StatusBarItem>
+            <StatusBarItem HorizontalAlignment="Right">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="{Binding ProgressPercentText}"
+                               MinWidth="36" Margin="0,0,8,0"
+                               VerticalAlignment="Center" FontWeight="SemiBold"
+                               Foreground="{DynamicResource AccentBrush}"
+                               Visibility="{Binding IsBusy, Converter={StaticResource BoolToVisibility}}"/>
+                    <ProgressBar Width="140" Height="14"
+                                 Minimum="0" Maximum="100"
+                                 Value="{Binding ProgressValue}"
+                                 IsIndeterminate="{Binding IsProgressIndeterminate}"/>
+                </StackPanel>
+            </StatusBarItem>
+            <StatusBarItem HorizontalAlignment="Right">
+                <Button Content="Cancel" Padding="8,2" Margin="6,0,0,0" MinWidth="72"
+                        Style="{StaticResource SecondaryButtonStyle}"
+                        Command="{Binding CancelCommand}"
+                        Visibility="{Binding IsBusy, Converter={StaticResource BoolToVisibility}}"/>
+            </StatusBarItem>
+        </StatusBar>
+
+        <Grid Margin="0">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="8"/>
+                <RowDefinition Height="168" MinHeight="110"/>
+                <RowDefinition Height="8"/>
+                <RowDefinition Height="130" MinHeight="80"/>
+            </Grid.RowDefinitions>
+
+            <Grid Grid.Row="0" Margin="8,8,8,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="232" MinWidth="200"/>
+                    <ColumnDefinition Width="8"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <Border Grid.Column="0"
+                        Background="{DynamicResource PanelBackgroundBrush}"
+                        BorderBrush="{DynamicResource BorderBrushSubtle}" BorderThickness="1" CornerRadius="2">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="8">
+                        <StackPanel>
+                            <TextBlock Text="Partition operations" Style="{StaticResource SectionHeaderStyle}"/>
+                            <Button Content="Resize / extend" Style="{StaticResource SidebarButtonStyle}"
+                                    Command="{Binding ResizePartitionCommand}"/>
+                            <Button Content="Create partition" Style="{StaticResource SidebarButtonStyle}"
+                                    Command="{Binding CreatePartitionCommand}"/>
+                            <Button Content="Delete partition" Style="{StaticResource SidebarButtonStyle}"
+                                    Command="{Binding DeletePartitionCommand}"/>
+                            <Button Content="Format partition" Style="{StaticResource SidebarButtonStyle}"
+                                    Command="{Binding FormatPartitionCommand}"/>
+                            <Button Content="Change drive letter" Style="{StaticResource SidebarButtonStyle}"
+                                    Command="{Binding ChangeDriveLetterCommand}"/>
+                            <Button Content="Change label" Style="{StaticResource SidebarButtonStyle}"
+                                    Command="{Binding ChangeLabelCommand}"/>
+                            <Button Content="{Binding HideHeader}" Style="{StaticResource SidebarButtonStyle}"
+                                    Command="{Binding HidePartitionCommand}"/>
+                            <Button Content="Set active" Style="{StaticResource SidebarButtonStyle}"
+                                    Command="{Binding SetActiveCommand}"/>
+                            <Button Content="Check partition" Style="{StaticResource SidebarButtonStyle}"
+                                    Command="{Binding CheckPartitionCommand}"/>
+                            <Button Content="Properties" Style="{StaticResource SidebarButtonStyle}"
+                                    Command="{Binding PartitionPropertiesCommand}"/>
+
+                            <TextBlock Text="Disk operations" Style="{StaticResource SectionHeaderStyle}" Margin="0,16,0,8"/>
+                            <Button Content="Initialize disk" Style="{StaticResource SidebarButtonStyle}"
+                                    Command="{Binding InitializeDiskCommand}"/>
+                            <Button Content="{Binding ConvertHeader}" Style="{StaticResource SidebarButtonStyle}"
+                                    Command="{Binding ConvertStyleCommand}"/>
+                            <Button Content="Delete all partitions" Style="{StaticResource SidebarButtonStyle}"
+                                    Command="{Binding DeleteAllPartitionsCommand}"/>
+                            <Button Content="{Binding OnlineHeader}" Style="{StaticResource SidebarButtonStyle}"
+                                    Command="{Binding ToggleOnlineCommand}"/>
+                            <Button Content="Disk properties" Style="{StaticResource SidebarButtonStyle}"
+                                    Command="{Binding DiskPropertiesCommand}"/>
+                        </StackPanel>
+                    </ScrollViewer>
+                </Border>
+
+                <GridSplitter Grid.Column="1" Width="8" HorizontalAlignment="Stretch"
+                              Background="{DynamicResource WindowBackgroundBrush}"/>
+
+                <Border Grid.Column="2"
+                        Background="{DynamicResource PanelBackgroundBrush}"
+                        BorderBrush="{DynamicResource BorderBrushSubtle}" BorderThickness="1" CornerRadius="2">
+                    <Grid>
+                        <ListView x:Name="PartitionList"
+                                  ItemsSource="{Binding PartitionsView}"
+                                  SelectedItem="{Binding SelectedPartition, Mode=TwoWay}"
+                                  BorderThickness="0"
+                                  AlternationCount="2"
+                                  SelectionMode="Single"
+                                  VirtualizingPanel.IsVirtualizing="True"
+                                  ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                  ScrollViewer.VerticalScrollBarVisibility="Auto"
+                                  MouseDoubleClick="PartitionList_MouseDoubleClick">
+                            <ListView.Resources>
+                                <Style TargetType="ListViewItem" BasedOn="{StaticResource PartitionListViewItemStyle}"/>
+                            </ListView.Resources>
+                            <ListView.ContextMenu>
+                                <ContextMenu>
+                                    <MenuItem Header="Resize / extend" Command="{Binding ResizePartitionCommand}"/>
+                                    <MenuItem Header="Create partition" Command="{Binding CreatePartitionCommand}"/>
+                                    <MenuItem Header="Delete partition" Command="{Binding DeletePartitionCommand}"/>
+                                    <MenuItem Header="Format partition" Command="{Binding FormatPartitionCommand}"/>
+                                    <Separator/>
+                                    <MenuItem Header="Change drive letter" Command="{Binding ChangeDriveLetterCommand}"/>
+                                    <MenuItem Header="Change label" Command="{Binding ChangeLabelCommand}"/>
+                                    <Separator/>
+                                    <MenuItem Header="Properties" Command="{Binding PartitionPropertiesCommand}"/>
+                                </ContextMenu>
+                            </ListView.ContextMenu>
+                            <ListView.View>
+                                <GridView ColumnHeaderContainerStyle="{StaticResource ThemedGridViewColumnHeader}">
+                                    <GridViewColumn Header="Drive" Width="64">
+                                        <GridViewColumn.CellTemplate>
+                                            <DataTemplate>
+                                                <TextBlock Text="{Binding DriveText}" FontWeight="SemiBold"
+                                                           Foreground="{DynamicResource PrimaryTextBrush}"/>
+                                            </DataTemplate>
+                                        </GridViewColumn.CellTemplate>
+                                    </GridViewColumn>
+                                    <GridViewColumn Header="Label" Width="160">
+                                        <GridViewColumn.CellTemplate>
+                                            <DataTemplate>
+                                                <TextBlock Text="{Binding LabelText}" TextTrimming="CharacterEllipsis"
+                                                           Foreground="{DynamicResource PrimaryTextBrush}"
+                                                           FontWeight="{Binding IsPending, Converter={StaticResource BoolToBold}}"
+                                                           ToolTip="{Binding DisplayName}"/>
+                                            </DataTemplate>
+                                        </GridViewColumn.CellTemplate>
+                                    </GridViewColumn>
+                                    <GridViewColumn Header="File system" Width="90">
+                                        <GridViewColumn.CellTemplate>
+                                            <DataTemplate>
+                                                <TextBlock Text="{Binding FileSystemText}" Foreground="{DynamicResource PrimaryTextBrush}"/>
+                                            </DataTemplate>
+                                        </GridViewColumn.CellTemplate>
+                                    </GridViewColumn>
+                                    <GridViewColumn Header="Status" Width="110">
+                                        <GridViewColumn.CellTemplate>
+                                            <DataTemplate>
+                                                <TextBlock Text="{Binding StatusText}" Foreground="{DynamicResource PrimaryTextBrush}"/>
+                                            </DataTemplate>
+                                        </GridViewColumn.CellTemplate>
+                                    </GridViewColumn>
+                                    <GridViewColumn Header="Type" Width="110">
+                                        <GridViewColumn.CellTemplate>
+                                            <DataTemplate>
+                                                <TextBlock Text="{Binding TypeText}" Foreground="{DynamicResource PrimaryTextBrush}"/>
+                                            </DataTemplate>
+                                        </GridViewColumn.CellTemplate>
+                                    </GridViewColumn>
+                                    <GridViewColumn Header="Size" Width="90">
+                                        <GridViewColumn.CellTemplate>
+                                            <DataTemplate>
+                                                <TextBlock Text="{Binding SizeText}" Foreground="{DynamicResource PrimaryTextBrush}"/>
+                                            </DataTemplate>
+                                        </GridViewColumn.CellTemplate>
+                                    </GridViewColumn>
+                                    <GridViewColumn Header="Used" Width="140">
+                                        <GridViewColumn.CellTemplate>
+                                            <DataTemplate>
+                                                <Grid>
+                                                    <ProgressBar Height="14" Minimum="0" Maximum="100"
+                                                                 Value="{Binding UsedPercent, Mode=OneWay}"
+                                                                 Visibility="{Binding IsUnallocated, Converter={StaticResource InverseBoolToVisibility}}"/>
+                                                    <TextBlock Text="{Binding UsedText}" FontSize="11"
+                                                               HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                               Foreground="{DynamicResource PrimaryTextBrush}"/>
+                                                </Grid>
+                                            </DataTemplate>
+                                        </GridViewColumn.CellTemplate>
+                                    </GridViewColumn>
+                                    <GridViewColumn Header="Free" Width="90">
+                                        <GridViewColumn.CellTemplate>
+                                            <DataTemplate>
+                                                <TextBlock Text="{Binding FreeText}" Style="{StaticResource MutedTextStyle}"/>
+                                            </DataTemplate>
+                                        </GridViewColumn.CellTemplate>
+                                    </GridViewColumn>
+                                    <GridViewColumn Header="Disk" Width="80">
+                                        <GridViewColumn.CellTemplate>
+                                            <DataTemplate>
+                                                <TextBlock Text="{Binding DiskText}" Style="{StaticResource MutedTextStyle}"/>
+                                            </DataTemplate>
+                                        </GridViewColumn.CellTemplate>
+                                    </GridViewColumn>
+                                </GridView>
+                            </ListView.View>
+                        </ListView>
+
+                        <Border Background="{DynamicResource PanelBackgroundBrush}"
+                                Visibility="{Binding ShowEmptyState, Converter={StaticResource BoolToVisibility}}">
+                            <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" MaxWidth="420">
+                                <TextBlock Text="{Binding EmptyStateTitle}" FontSize="16" FontWeight="SemiBold"
+                                           HorizontalAlignment="Center" TextAlignment="Center"/>
+                                <TextBlock Text="{Binding EmptyStateDetail}" Margin="0,8,0,0"
+                                           TextAlignment="Center" TextWrapping="Wrap"
+                                           Style="{StaticResource MutedTextStyle}"/>
+                                <Button Content="Refresh" Margin="0,16,0,0" HorizontalAlignment="Center"
+                                        Style="{StaticResource PrimaryButtonStyle}"
+                                        Command="{Binding RefreshCommand}"/>
+                            </StackPanel>
+                        </Border>
+                    </Grid>
+                </Border>
+            </Grid>
+
+            <GridSplitter Grid.Row="1" Height="8" HorizontalAlignment="Stretch"
+                          Background="{DynamicResource WindowBackgroundBrush}"/>
+
+            <Border Grid.Row="2" Margin="8,0"
+                    Background="{DynamicResource PanelBackgroundBrush}"
+                    BorderBrush="{DynamicResource BorderBrushSubtle}" BorderThickness="1" CornerRadius="2">
+                <DockPanel>
+                    <DockPanel DockPanel.Dock="Top" Margin="8,6,8,4">
+                        <TextBlock Text="Disk map" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                            <Border Width="12" Height="12" Margin="8,0,4,0" Background="#4A90D9"/>
+                            <TextBlock Text="Primary" Style="{StaticResource MutedTextStyle}" VerticalAlignment="Center"/>
+                            <Border Width="12" Height="12" Margin="12,0,4,0" Background="#5CB85C"/>
+                            <TextBlock Text="Logical" Style="{StaticResource MutedTextStyle}" VerticalAlignment="Center"/>
+                            <Border Width="12" Height="12" Margin="12,0,4,0" Background="#8E6BC7"/>
+                            <TextBlock Text="EFI" Style="{StaticResource MutedTextStyle}" VerticalAlignment="Center"/>
+                            <Border Width="12" Height="12" Margin="12,0,4,0" Background="#E6A23C"/>
+                            <TextBlock Text="Recovery" Style="{StaticResource MutedTextStyle}" VerticalAlignment="Center"/>
+                            <Border Width="12" Height="12" Margin="12,0,4,0" Background="#C8C8C8" BorderBrush="#999" BorderThickness="1"/>
+                            <TextBlock Text="Unallocated" Style="{StaticResource MutedTextStyle}" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </DockPanel>
+                    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Margin="6,0,6,6">
+                        <ItemsControl ItemsSource="{Binding Disks}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid Margin="0,4" Height="56">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="168"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <Button Grid.Column="0" Style="{StaticResource SidebarButtonStyle}"
+                                                Command="{Binding DataContext.PickDiskCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                CommandParameter="{Binding}"
+                                                Tag="{Binding DataContext, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                ToolTip="{Binding DetailText}"
+                                                PreviewMouseRightButtonDown="MapDisk_PreviewMouseRightButtonDown">
+                                            <Button.ContextMenu>
+                                                <ContextMenu DataContext="{Binding PlacementTarget.Tag, RelativeSource={RelativeSource Self}}">
+                                                    <MenuItem Header="Initialize disk" Command="{Binding InitializeDiskCommand}"/>
+                                                    <MenuItem Header="{Binding ConvertHeader}" Command="{Binding ConvertStyleCommand}"/>
+                                                    <MenuItem Header="Delete all partitions" Command="{Binding DeleteAllPartitionsCommand}"/>
+                                                    <MenuItem Header="{Binding OnlineHeader}" Command="{Binding ToggleOnlineCommand}"/>
+                                                    <Separator/>
+                                                    <MenuItem Header="Disk properties" Command="{Binding DiskPropertiesCommand}"/>
+                                                </ContextMenu>
+                                            </Button.ContextMenu>
+                                            <StackPanel>
+                                                <TextBlock Text="{Binding HeaderText}" FontWeight="SemiBold"/>
+                                                <TextBlock Text="{Binding SizeText}" FontSize="11" Style="{StaticResource MutedTextStyle}"/>
+                                            </StackPanel>
+                                        </Button>
+                                        <Border Grid.Column="1"
+                                                BorderBrush="{DynamicResource BorderBrushSubtle}"
+                                                BorderThickness="1"
+                                                SnapsToDevicePixels="True"
+                                                UseLayoutRounding="True">
+                                            <controls:DiskMapStrip Segments="{Binding Segments}"/>
+                                        </Border>
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </DockPanel>
+            </Border>
+
+            <GridSplitter Grid.Row="3" Height="8" HorizontalAlignment="Stretch"
+                          Background="{DynamicResource WindowBackgroundBrush}"/>
+
+            <Grid Grid.Row="4" Margin="8,0,8,8">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="8"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <Border Grid.Column="0"
+                        Background="{DynamicResource PanelBackgroundBrush}"
+                        BorderBrush="{DynamicResource BorderBrushSubtle}" BorderThickness="1" CornerRadius="2">
+                    <DockPanel>
+                        <TextBlock DockPanel.Dock="Top" Margin="8,6,8,4" FontWeight="SemiBold"
+                                   Text="Pending operations"/>
+                        <ListBox ItemsSource="{Binding PendingOperations}" BorderThickness="0" Margin="4,0,4,4">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding Description}" TextWrapping="Wrap" Margin="2"/>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                    </DockPanel>
+                </Border>
+
+                <GridSplitter Grid.Column="1" Width="8" HorizontalAlignment="Stretch"
+                              Background="{DynamicResource WindowBackgroundBrush}"/>
+
+                <Border Grid.Column="2"
+                        Background="{DynamicResource PanelBackgroundBrush}"
+                        BorderBrush="{DynamicResource BorderBrushSubtle}" BorderThickness="1" CornerRadius="2">
+                    <DockPanel>
+                        <TextBlock DockPanel.Dock="Top" Margin="8,6,8,4" FontWeight="SemiBold" Text="Activity log"/>
+                        <ListBox x:Name="LogList" ItemsSource="{Binding LogEntries}" BorderThickness="0"
+                                 Margin="4,0,4,4" FontFamily="{StaticResource AppFontMono}" FontSize="11"
+                                 ScrollViewer.HorizontalScrollBarVisibility="Auto"/>
+                    </DockPanel>
+                </Border>
+            </Grid>
+
+            <Border Background="{DynamicResource BusyOverlayBrush}"
+                    Visibility="{Binding IsBusy, Converter={StaticResource BoolToVisibility}}"
+                    IsHitTestVisible="True">
+                <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+                    <TextBlock Text="{Binding BusyOverlayText}" FontSize="16" FontWeight="SemiBold"
+                               HorizontalAlignment="Center"/>
+                    <ProgressBar Width="240" Height="8" Margin="0,12,0,0"
+                                 IsIndeterminate="{Binding IsProgressIndeterminate}"
+                                 Value="{Binding ProgressValue}" Minimum="0" Maximum="100"/>
+                </StackPanel>
+            </Border>
+        </Grid>
+    </DockPanel>
+</Window>

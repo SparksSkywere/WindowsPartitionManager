@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/PartitionManager/PartitionManager.csproj" />
+  </Folder>
+  <Folder Name="/installer/">
+    <Project Path="installer/wix/PartitionManager.Installer/PartitionManager.Installer.wixproj" />
+    <Project Path="installer/wix/PartitionManager.Bundle/PartitionManager.Bundle.wixproj" />
+  </Folder>
+</Solution>
+

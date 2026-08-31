@@ -1,0 +1,175 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Windows Installer package (MSI) for Partition Manager.
+  Feature tree UI: browse install folder + Start Menu and Desktop shortcuts (on by default).
+
+  Upgrade / uninstall:
+  - Stable UpgradeCode + MajorUpgrade removes previous installs (including same version rebuilds).
+  - CloseApplication stops a running instance so files are not locked.
+  - Install folder path is written to the registry; RemoveFolderEx cleans orphans on uninstall/upgrade.
+-->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui"
+     xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util">
+
+  <Package Name="Partition Manager"
+           Language="1033"
+           Version="1.0.0"
+           Manufacturer="Skywere Industries"
+           UpgradeCode="9E2F6B14-8C71-4A5D-B3E0-1D47A9C6F8B2"
+           Scope="perMachine"
+           InstallerVersion="500">
+
+    <SummaryInformation Description="Manage disks and partitions on Windows (create, delete, format, resize, drive letters, MBR/GPT)."
+                        Manufacturer="Skywere Industries" />
+
+    <MajorUpgrade DowngradeErrorMessage="A newer version of [ProductName] is already installed. Uninstall it first if you need to roll back."
+                  AllowSameVersionUpgrades="yes"
+                  Schedule="afterInstallInitialize" />
+
+    <MediaTemplate EmbedCab="yes" CompressionLevel="high" />
+
+    <Icon Id="AppIcon" SourceFile="..\..\..\assets\installer.ico" />
+    <Property Id="ARPPRODUCTICON" Value="AppIcon" />
+    <Property Id="ARPNOMODIFY" Value="1" />
+    <Property Id="WIXUI_INSTALLDIR" Value="INSTALLFOLDER" />
+
+    <Property Id="PM_INSTALL_DIR">
+      <RegistrySearch Id="FindPmInstallDir"
+                      Root="HKLM"
+                      Key="Software\Skywere Industries\PartitionManager"
+                      Name="InstallDir"
+                      Type="raw" />
+    </Property>
+
+    <util:CloseApplication Id="ClosePartitionManager"
+                           Target="PartitionManager.exe"
+                           CloseMessage="yes"
+                           ElevatedCloseMessage="yes"
+                           RebootPrompt="no"
+                           TerminateProcess="2000"
+                           PromptToContinue="no" />
+
+    <ui:WixUI Id="WixUI_FeatureTree" />
+    <WixVariable Id="WixUILicenseRtf" Value="License.rtf" />
+
+    <Feature Id="ProductFeature"
+             Title="Partition Manager"
+             Description="Program files"
+             Level="1"
+             ConfigurableDirectory="INSTALLFOLDER"
+             AllowAbsent="no"
+             Display="expand">
+      <ComponentGroupRef Id="ProductComponents" />
+      <ComponentRef Id="AppRegistration" />
+
+      <Feature Id="StartMenuShortcutFeature"
+               Title="Start Menu shortcuts"
+               Description="Create shortcuts under Start Menu\Skywere Industries"
+               Level="1"
+               AllowAbsent="yes">
+        <ComponentRef Id="AppShortcuts" />
+      </Feature>
+
+      <Feature Id="DesktopShortcutFeature"
+               Title="Desktop shortcut"
+               Description="Create a Partition Manager shortcut on the Desktop"
+               Level="1"
+               AllowAbsent="yes">
+        <ComponentRef Id="DesktopShortcutComponent" />
+      </Feature>
+    </Feature>
+
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="INSTALLFOLDER" Name="PartitionManager" />
+    </StandardDirectory>
+
+    <StandardDirectory Id="ProgramMenuFolder">
+      <Directory Id="AppProgramMenuFolder" Name="Skywere Industries" />
+    </StandardDirectory>
+
+    <StandardDirectory Id="DesktopFolder" />
+
+    <ComponentGroup Id="ProductComponents" Directory="INSTALLFOLDER">
+      <Files Include="!(bindpath.Payload)\**">
+        <Exclude Files="!(bindpath.Payload)\**\*.pdb" />
+      </Files>
+    </ComponentGroup>
+
+    <Component Id="AppRegistration"
+               Directory="INSTALLFOLDER"
+               Guid="9E2F6B14-8C71-4A5D-B3E0-1D47A9C6F801"
+               Bitness="always64">
+      <RegistryValue Root="HKLM"
+                     Key="Software\Skywere Industries\PartitionManager"
+                     Name="InstallDir"
+                     Type="string"
+                     Value="[INSTALLFOLDER]"
+                     KeyPath="yes" />
+      <RegistryValue Root="HKLM"
+                     Key="Software\Skywere Industries\PartitionManager"
+                     Name="Installed"
+                     Type="integer"
+                     Value="1" />
+      <RegistryValue Root="HKLM"
+                     Key="Software\Skywere Industries\PartitionManager"
+                     Name="Version"
+                     Type="string"
+                     Value="[ProductVersion]" />
+      <util:RemoveFolderEx Id="RemoveInstallFolderEx"
+                           Property="PM_INSTALL_DIR"
+                           On="uninstall" />
+      <RemoveFolder Id="RemoveInstallFolder" Directory="INSTALLFOLDER" On="uninstall" />
+    </Component>
+
+    <Component Id="AppShortcuts"
+               Directory="INSTALLFOLDER"
+               Guid="9E2F6B14-8C71-4A5D-B3E0-1D47A9C6F802"
+               Bitness="always64">
+      <RegistryValue Root="HKLM"
+                     Key="Software\Skywere Industries\PartitionManager"
+                     Name="Shortcuts"
+                     Type="integer"
+                     Value="1"
+                     KeyPath="yes" />
+      <Shortcut Id="StartMenuAppShortcut"
+                Directory="AppProgramMenuFolder"
+                Name="Partition Manager"
+                Description="Manage disks and partitions on Windows"
+                Target="[INSTALLFOLDER]PartitionManager.exe"
+                WorkingDirectory="INSTALLFOLDER"
+                Icon="AppIcon"
+                IconIndex="0" />
+      <Shortcut Id="StartMenuUninstallShortcut"
+                Directory="AppProgramMenuFolder"
+                Name="Uninstall Partition Manager"
+                Description="Uninstall Partition Manager"
+                Target="[System64Folder]msiexec.exe"
+                Arguments="/x [ProductCode]"
+                Icon="AppIcon"
+                IconIndex="0" />
+      <RemoveFolder Id="RemoveAppProgramMenuFolder" Directory="AppProgramMenuFolder" On="uninstall" />
+    </Component>
+
+    <Component Id="DesktopShortcutComponent"
+               Directory="INSTALLFOLDER"
+               Guid="9E2F6B14-8C71-4A5D-B3E0-1D47A9C6F803"
+               Bitness="always64">
+      <RegistryValue Root="HKLM"
+                     Key="Software\Skywere Industries\PartitionManager"
+                     Name="DesktopShortcut"
+                     Type="integer"
+                     Value="1"
+                     KeyPath="yes" />
+      <Shortcut Id="DesktopAppShortcut"
+                Directory="DesktopFolder"
+                Name="Partition Manager"
+                Description="Manage disks and partitions on Windows"
+                Target="[INSTALLFOLDER]PartitionManager.exe"
+                WorkingDirectory="INSTALLFOLDER"
+                Icon="AppIcon"
+                IconIndex="0" />
+    </Component>
+
+  </Package>
+</Wix>

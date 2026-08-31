@@ -1,0 +1,34 @@
+<Window x:Class="PartitionManager.Views.ResizePartitionWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Resize partition"
+        Height="340" Width="480"
+        MinHeight="300" MinWidth="440"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize"
+        ShowInTaskbar="False"
+        Background="{DynamicResource WindowBackgroundBrush}"
+        Foreground="{DynamicResource PrimaryTextBrush}"
+        Icon="pack://application:,,,/Assets/app.ico">
+    <DockPanel Margin="16">
+        <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
+            <Button Content="OK" Width="88" Height="28" Margin="0,0,8,0" IsDefault="True"
+                    Click="Ok_Click" Style="{StaticResource PrimaryButtonStyle}"/>
+            <Button Content="Cancel" Width="88" Height="28" IsCancel="True"
+                    Style="{StaticResource SecondaryButtonStyle}"/>
+        </StackPanel>
+        <StackPanel>
+            <TextBlock x:Name="SummaryText" TextWrapping="Wrap" Margin="0,0,0,12"/>
+            <TextBlock Text="New size (MB)" FontWeight="SemiBold" Margin="0,0,0,4"/>
+            <DockPanel>
+                <TextBox x:Name="SizeBox" Width="90" DockPanel.Dock="Right" Margin="8,0,0,0"
+                         TextChanged="SizeBox_TextChanged"/>
+                <Slider x:Name="SizeSlider" TickFrequency="1"
+                        ValueChanged="SizeSlider_ValueChanged"/>
+            </DockPanel>
+            <TextBlock x:Name="RangeText" Style="{StaticResource MutedTextStyle}" Margin="0,6,0,12"/>
+            <TextBlock Text="Windows can shrink or extend a volume at its end. Adjacent unallocated space after the partition is used when extending. Moving a partition (changing its start offset) is not supported."
+                       Style="{StaticResource MutedTextStyle}" TextWrapping="Wrap"/>
+        </StackPanel>
+    </DockPanel>
+</Window>
