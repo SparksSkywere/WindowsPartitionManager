@@ -70,14 +70,15 @@ if (Test-Path $objDir) {
 
 Write-Host "`n[1/3] Publishing Partition Manager ($Runtime)..." -ForegroundColor Yellow
 $NugetOrg = 'https://api.nuget.org/v3/index.json'
-$Sln = Join-Path $Root 'PartitionManager.slnx'
 Write-Host "  Restoring packages from nuget.org..."
-if (Test-Path $Sln) {
-    dotnet restore $Sln --source $NugetOrg --force
-} else {
-    dotnet restore $AppProj --source $NugetOrg --force
+# Restore projects individually — older SDKs cannot restore .slnx (MSB4068).
+foreach ($proj in @($AppProj, $MsiProj, $BundleProj)) {
+    Write-Host "    $(Split-Path $proj -Leaf)"
+    dotnet restore $proj --source $NugetOrg
+    if ($LASTEXITCODE -ne 0) {
+        throw "NuGet restore failed for $(Split-Path $proj -Leaf). nuget.org must be reachable (see nuget.config)."
+    }
 }
-if ($LASTEXITCODE -ne 0) { throw 'NuGet restore failed. nuget.org must be reachable (see nuget.config).' }
 
 dotnet publish $AppProj `
     -c $Configuration `
