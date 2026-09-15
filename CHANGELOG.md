@@ -7,6 +7,7 @@
 - Queued clones show on the live disk map before Apply.
 - Raw aligned I/O for clone copies.
 - Installer script renamed from `build-installer.ps1` to `build.ps1`.
+- Repo `nuget.config` pins nuget.org so restore works on machines without a global package source.
 
 ## 1.0.0
 

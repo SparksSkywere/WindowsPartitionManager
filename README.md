@@ -6,7 +6,7 @@ Disk and partition manager — inspect disks, queue changes on a live map, and a
 
 - Windows 10/11
 - Administrator privileges for create / delete / format / resize / initialize / clone
-- For building: [.NET 8 SDK](https://dotnet.microsoft.com/download)
+- For building: [.NET 8 SDK](https://dotnet.microsoft.com/download) and nuget.org (`nuget.config` in this repo)
 
 ## Install (release packages)
 

@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="UTF-8"?>
+﻿<?xml version="1.0" encoding="UTF-8"?>
 <!--
   Windows Installer package (MSI) for Partition Manager.
   Feature tree UI: browse install folder + Start Menu and Desktop shortcuts (on by default).
@@ -14,7 +14,7 @@
 
   <Package Name="Partition Manager"
            Language="1033"
-           Version="1.0.0"
+           Version="1.1.0"
            Manufacturer="Skywere Industries"
            UpgradeCode="9E2F6B14-8C71-4A5D-B3E0-1D47A9C6F8B2"
            Scope="perMachine"
