@@ -37,6 +37,7 @@
                         <MenuItem Header="Set active" Command="{Binding SetActiveCommand}"/>
                         <Separator/>
                         <MenuItem Header="Check partition" Command="{Binding CheckPartitionCommand}"/>
+                        <MenuItem Header="Clone partition" Command="{Binding ClonePartitionCommand}"/>
                         <MenuItem Header="Properties" Command="{Binding PartitionPropertiesCommand}"/>
                     </ContextMenu>
                 </Button.ContextMenu>

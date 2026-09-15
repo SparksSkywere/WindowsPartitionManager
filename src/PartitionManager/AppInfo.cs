@@ -10,9 +10,9 @@ public static class AppInfo
     public const string Company = "Skywere Industries";
     public const string Copyright = "Copyright © Skywere Industries";
     public const string Description =
-        "Manage disks and partitions on Windows. Create, delete, format, and resize volumes, " +
-        "change drive letters and labels, initialize MBR or GPT disks, and queue changes " +
-        "until you click Apply — with a live disk map preview.";
+        "Manage disks and partitions on Windows. Create, delete, format, resize, and clone " +
+        "volumes, change drive letters and labels, initialize MBR or GPT disks, and queue " +
+        "changes until you click Apply — with a live disk map preview.";
 
     public const string ExeFileName = "PartitionManager.exe";
     public const string InstallFolderName = "PartitionManager";

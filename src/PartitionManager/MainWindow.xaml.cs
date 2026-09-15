@@ -55,6 +55,16 @@ public partial class MainWindow : Window
             var w = new InitializeDiskWindow(d) { Owner = this };
             return w.ShowDialog() == true ? w.Result : null;
         };
+        viewModel.PromptCloneDisk = (source, disks) =>
+        {
+            var w = new CloneDiskWindow(source, disks) { Owner = this };
+            return w.ShowDialog() == true ? w.Result : null;
+        };
+        viewModel.PromptClonePartition = (source, disks) =>
+        {
+            var w = new ClonePartitionWindow(source, disks) { Owner = this };
+            return w.ShowDialog() == true ? w.Result : null;
+        };
         viewModel.PromptApply = ops =>
         {
             var w = new ApplyOperationsWindow(ops) { Owner = this };

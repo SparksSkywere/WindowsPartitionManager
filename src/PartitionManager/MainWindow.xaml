@@ -46,9 +46,11 @@
                 <MenuItem Header="Set _active" Command="{Binding SetActiveCommand}"/>
                 <Separator/>
                 <MenuItem Header="C_heck" Command="{Binding CheckPartitionCommand}"/>
+                <MenuItem Header="C_lone partition" Command="{Binding ClonePartitionCommand}"/>
                 <MenuItem Header="_Properties" Command="{Binding PartitionPropertiesCommand}"/>
             </MenuItem>
             <MenuItem Header="_Disk">
+                <MenuItem Header="_Clone disk" Command="{Binding CloneDiskCommand}"/>
                 <MenuItem Header="_Initialize" Command="{Binding InitializeDiskCommand}"/>
                 <MenuItem Header="{Binding ConvertHeader}" Command="{Binding ConvertStyleCommand}"/>
                 <MenuItem Header="Delete _all partitions" Command="{Binding DeleteAllPartitionsCommand}"/>
@@ -204,10 +206,14 @@
                                     Command="{Binding SetActiveCommand}"/>
                             <Button Content="Check partition" Style="{StaticResource SidebarButtonStyle}"
                                     Command="{Binding CheckPartitionCommand}"/>
+                            <Button Content="Clone partition" Style="{StaticResource SidebarButtonStyle}"
+                                    Command="{Binding ClonePartitionCommand}"/>
                             <Button Content="Properties" Style="{StaticResource SidebarButtonStyle}"
                                     Command="{Binding PartitionPropertiesCommand}"/>
 
                             <TextBlock Text="Disk operations" Style="{StaticResource SectionHeaderStyle}" Margin="0,16,0,8"/>
+                            <Button Content="Clone disk" Style="{StaticResource SidebarButtonStyle}"
+                                    Command="{Binding CloneDiskCommand}"/>
                             <Button Content="Initialize disk" Style="{StaticResource SidebarButtonStyle}"
                                     Command="{Binding InitializeDiskCommand}"/>
                             <Button Content="{Binding ConvertHeader}" Style="{StaticResource SidebarButtonStyle}"
@@ -251,6 +257,7 @@
                                     <Separator/>
                                     <MenuItem Header="Change drive letter" Command="{Binding ChangeDriveLetterCommand}"/>
                                     <MenuItem Header="Change label" Command="{Binding ChangeLabelCommand}"/>
+                                    <MenuItem Header="Clone partition" Command="{Binding ClonePartitionCommand}"/>
                                     <Separator/>
                                     <MenuItem Header="Properties" Command="{Binding PartitionPropertiesCommand}"/>
                                 </ContextMenu>
@@ -391,6 +398,7 @@
                                                 PreviewMouseRightButtonDown="MapDisk_PreviewMouseRightButtonDown">
                                             <Button.ContextMenu>
                                                 <ContextMenu DataContext="{Binding PlacementTarget.Tag, RelativeSource={RelativeSource Self}}">
+                                                    <MenuItem Header="Clone disk" Command="{Binding CloneDiskCommand}"/>
                                                     <MenuItem Header="Initialize disk" Command="{Binding InitializeDiskCommand}"/>
                                                     <MenuItem Header="{Binding ConvertHeader}" Command="{Binding ConvertStyleCommand}"/>
                                                     <MenuItem Header="Delete all partitions" Command="{Binding DeleteAllPartitionsCommand}"/>

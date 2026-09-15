@@ -58,6 +58,12 @@ public static class LayoutPreview
             case OperationKind.OnlineDisk:
                 ApplyOnline(layout, op, op.Kind == OperationKind.OnlineDisk);
                 break;
+            case OperationKind.CloneDisk:
+                ApplyCloneDisk(layout, op);
+                break;
+            case OperationKind.ClonePartition:
+                ApplyClonePartition(layout, op);
+                break;
         }
     }
 
@@ -323,6 +329,140 @@ public static class LayoutPreview
                 IsPending = true
             }
         ];
+    }
+
+    private static void ApplyCloneDisk(DiskLayout layout, PendingOperation op)
+    {
+        var p = op.CloneDisk;
+        var dest = p is null ? null : layout.FindDisk(p.DestDisk);
+        if (p is null || dest is null || !CloneLayoutPlanner.TryPlanDisk(p, out var plan, out _))
+            return;
+
+        dest.PartitionStyle = p.Style;
+        dest.Status = "Pending clone";
+        dest.IsOffline = false;
+        dest.Segments = [];
+        foreach (var slice in plan)
+            dest.Segments.Add(PendingSegment(dest.Number, slice));
+
+        FillGaps(dest);
+        dest.AllocatedSize = dest.Segments.Where(s => !s.IsUnallocated).Aggregate(0UL, (n, s) => n + s.Size);
+    }
+
+    private static void ApplyClonePartition(DiskLayout layout, PendingOperation op)
+    {
+        var p = op.ClonePartition;
+        var dest = p is null ? null : layout.FindDisk(p.DestDisk);
+        if (p is null || dest is null || !CloneLayoutPlanner.TryPlanPartition(p, out var planned, out _))
+            return;
+
+        var gap = dest.Segments.FirstOrDefault(s =>
+                      s.IsUnallocated && s.Offset <= planned.DestOffset &&
+                      s.Offset + s.Size >= planned.DestOffset + planned.DestSize)
+                  ?? dest.Segments.FirstOrDefault(s => s.IsUnallocated && s.Offset == p.DestOffset);
+        if (gap is null)
+            return;
+
+        var created = PendingSegment(dest.Number, planned);
+        var index = dest.Segments.IndexOf(gap);
+        dest.Segments.RemoveAt(index);
+
+        if (planned.DestOffset > gap.Offset &&
+            planned.DestOffset - gap.Offset >= DiskInventoryService.MinUnallocatedBytes)
+        {
+            dest.Segments.Insert(index++, new SegmentModel
+            {
+                DiskNumber = dest.Number,
+                IsUnallocated = true,
+                Offset = gap.Offset,
+                Size = planned.DestOffset - gap.Offset,
+                Kind = SegmentKind.Unallocated,
+                Status = "Unallocated",
+                SizeRemaining = planned.DestOffset - gap.Offset,
+                IsPending = true
+            });
+        }
+
+        dest.Segments.Insert(index++, created);
+        var leftoverOffset = planned.DestOffset + planned.DestSize;
+        var gapEnd = gap.Offset + gap.Size;
+        if (gapEnd > leftoverOffset && gapEnd - leftoverOffset >= DiskInventoryService.MinUnallocatedBytes)
+        {
+            dest.Segments.Insert(index, new SegmentModel
+            {
+                DiskNumber = dest.Number,
+                IsUnallocated = true,
+                Offset = leftoverOffset,
+                Size = gapEnd - leftoverOffset,
+                Kind = SegmentKind.Unallocated,
+                Status = "Unallocated",
+                SizeRemaining = gapEnd - leftoverOffset,
+                IsPending = true
+            });
+        }
+
+        dest.Segments = dest.Segments.OrderBy(s => s.Offset).ToList();
+        MergeUnallocated(dest);
+    }
+
+    private static SegmentModel PendingSegment(int diskNumber, PlannedSlice slice) => new()
+    {
+        DiskNumber = diskNumber,
+        Offset = slice.DestOffset,
+        Size = slice.DestSize,
+        FileSystem = slice.Source.FileSystem,
+        SizeRemaining = slice.DestSize,
+        Kind = slice.Source.Kind,
+        IsActive = slice.Source.IsActive,
+        IsHidden = slice.Source.IsHidden,
+        Status = "Pending clone",
+        IsPending = true,
+        GptType = slice.Source.GptType,
+        MbrType = slice.Source.MbrType
+    };
+
+    private static void FillGaps(DiskModel disk)
+    {
+        var ordered = disk.Segments.OrderBy(s => s.Offset).ToList();
+        var filled = new List<SegmentModel>();
+        ulong cursor = 0;
+        foreach (var seg in ordered)
+        {
+            if (seg.Offset > cursor + DiskInventoryService.MinUnallocatedBytes)
+            {
+                filled.Add(new SegmentModel
+                {
+                    DiskNumber = disk.Number,
+                    IsUnallocated = true,
+                    Offset = cursor,
+                    Size = seg.Offset - cursor,
+                    Kind = SegmentKind.Unallocated,
+                    Status = "Unallocated",
+                    SizeRemaining = seg.Offset - cursor,
+                    IsPending = true
+                });
+            }
+
+            filled.Add(seg);
+            cursor = seg.Offset + seg.Size;
+        }
+
+        if (disk.Size > cursor + DiskInventoryService.MinUnallocatedBytes)
+        {
+            filled.Add(new SegmentModel
+            {
+                DiskNumber = disk.Number,
+                IsUnallocated = true,
+                Offset = cursor,
+                Size = disk.Size - cursor,
+                Kind = SegmentKind.Unallocated,
+                Status = "Unallocated",
+                SizeRemaining = disk.Size - cursor,
+                IsPending = true
+            });
+        }
+
+        disk.Segments = filled;
     }
 
     private static void ApplyOnline(DiskLayout layout, PendingOperation op, bool online)

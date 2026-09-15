@@ -14,7 +14,10 @@ public sealed class PartitionOperationExecutor
         _log = log;
     }
 
-    public async Task<OperationResult> ExecuteAsync(PendingOperation op, CancellationToken cancellationToken)
+    public async Task<OperationResult> ExecuteAsync(
+        PendingOperation op,
+        CancellationToken cancellationToken,
+        IProgress<int>? progress = null)
     {
         cancellationToken.ThrowIfCancellationRequested();
         _log.Info("Apply: " + op.Description);
@@ -36,6 +39,8 @@ public sealed class PartitionOperationExecutor
                 OperationKind.DeleteAllPartitions => await Task.Run(() => ClearDisk(op), cancellationToken).ConfigureAwait(false),
                 OperationKind.OfflineDisk => await Task.Run(() => SetDiskOnline(op, false), cancellationToken).ConfigureAwait(false),
                 OperationKind.OnlineDisk => await Task.Run(() => SetDiskOnline(op, true), cancellationToken).ConfigureAwait(false),
+                OperationKind.CloneDisk => await Task.Run(() => CloneDisk(op, progress, cancellationToken), cancellationToken).ConfigureAwait(false),
+                OperationKind.ClonePartition => await Task.Run(() => ClonePartition(op, progress, cancellationToken), cancellationToken).ConfigureAwait(false),
                 _ => Fail("Unsupported operation.")
             };
         }
@@ -276,13 +281,88 @@ public sealed class PartitionOperationExecutor
         return Invoke(disk, "Clear", inParams);
     }
 
-    private OperationResult SetDiskOnline(PendingOperation op, bool online)
+    private OperationResult SetDiskOnline(PendingOperation op, bool online) =>
+        SetDiskOnline(op.DiskNumber, online);
+
+    private OperationResult CloneDisk(PendingOperation op, IProgress<int>? progress, CancellationToken cancellationToken)
     {
-        using var disk = GetDisk(op.DiskNumber);
+        var p = op.CloneDisk ?? throw new InvalidOperationException("Clone disk parameters missing.");
+        return new DiskCloneService(_log, this).CloneDisk(p, progress, cancellationToken);
+    }
+
+    private OperationResult ClonePartition(PendingOperation op, IProgress<int>? progress, CancellationToken cancellationToken)
+    {
+        var p = op.ClonePartition ?? throw new InvalidOperationException("Clone partition parameters missing.");
+        return new DiskCloneService(_log, this).ClonePartition(p, progress, cancellationToken);
+    }
+
+    internal OperationResult SetDiskOnline(int diskNumber, bool online)
+    {
+        using var disk = GetDisk(diskNumber);
         if (disk is null)
-            return Fail($"Disk {op.DiskNumber} not found.");
+            return Fail($"Disk {diskNumber} not found.");
         var method = online ? "Online" : "Offline";
         return Invoke(disk, method, disk.GetMethodParameters(method));
+    }
+
+    internal OperationResult ClearDisk(int diskNumber) =>
+        ClearDisk(new PendingOperation { Kind = OperationKind.DeleteAllPartitions, DiskNumber = diskNumber });
+
+    internal OperationResult InitializeDisk(int diskNumber, PartitionStyleKind style) =>
+        InitializeDisk(new PendingOperation
+        {
+            Kind = OperationKind.InitializeDisk,
+            DiskNumber = diskNumber,
+            TargetStyle = style
+        });
+
+    internal OperationResult ResizePartition(int diskNumber, ulong offset, ulong newSize) =>
+        ResizePartition(new PendingOperation
+        {
+            Kind = OperationKind.ResizePartition,
+            DiskNumber = diskNumber,
+            Offset = offset,
+            Resize = new ResizePartitionParams { NewSize = newSize }
+        });
+
+    internal OperationResult SetActive(int diskNumber, ulong offset) =>
+        SetActive(new PendingOperation
+        {
+            Kind = OperationKind.SetActive,
+            DiskNumber = diskNumber,
+            Offset = offset
+        });
+
+    internal OperationResult SetHidden(int diskNumber, ulong offset, bool hidden) =>
+        SetHidden(new PendingOperation
+        {
+            Kind = hidden ? OperationKind.HidePartition : OperationKind.UnhidePartition,
+            DiskNumber = diskNumber,
+            Offset = offset
+        }, hidden);
+
+    internal OperationResult CreatePartitionRaw(int diskNumber, ulong offset, ulong size, string gptType, ushort mbrType)
+    {
+        using var disk = GetDisk(diskNumber);
+        if (disk is null)
+            return Fail($"Disk {diskNumber} not found.");
+
+        var inParams = disk.GetMethodParameters("CreatePartition");
+        inParams["Size"] = size;
+        inParams["UseMaximumSize"] = false;
+        inParams["Offset"] = offset;
+        inParams["Alignment"] = 1024u * 1024u;
+        inParams["AssignDriveLetter"] = false;
+
+        var style = DiskInventoryService.GetUInt16(disk, "PartitionStyle");
+        if (style == 1)
+            inParams["MbrType"] = mbrType != 0 ? mbrType : (ushort)7;
+        else
+            inParams["GptType"] = string.IsNullOrWhiteSpace(gptType)
+                ? "{ebd0a0a2-b9e5-4433-87c0-68b6b72699c7}"
+                : gptType;
+
+        return Invoke(disk, "CreatePartition", inParams);
     }
 
     private static ManagementObject? GetDisk(int number)

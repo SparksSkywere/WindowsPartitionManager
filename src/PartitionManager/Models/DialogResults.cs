@@ -1,3 +1,5 @@
+using PartitionManager.ViewModels;
+
 namespace PartitionManager.Models;
 
 public sealed class CreatePartitionDialogResult
@@ -35,4 +37,24 @@ public sealed class LabelDialogResult
 public sealed class InitializeDiskDialogResult
 {
     public PartitionStyleKind Style { get; init; } = PartitionStyleKind.Gpt;
+}
+
+public sealed class CloneDiskDialogResult
+{
+    public DiskViewModel Source { get; init; } = null!;
+    public DiskViewModel Dest { get; init; } = null!;
+    public CloneCopyMode Mode { get; init; }
+    public bool AlignToMegabyte { get; init; } = true;
+    public bool ExpandLastPartition { get; init; }
+}
+
+public sealed class ClonePartitionDialogResult
+{
+    public PartitionViewModel Source { get; init; } = null!;
+    public int DestDisk { get; init; }
+    public ulong DestOffset { get; init; }
+    public ulong DestRegionSize { get; init; }
+    public CloneCopyMode Mode { get; init; }
+    public bool AlignToMegabyte { get; init; } = true;
+    public bool FillRegion { get; init; }
 }

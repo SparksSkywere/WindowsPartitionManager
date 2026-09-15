@@ -57,6 +57,8 @@ public partial class MainViewModel : ObservableObject
     public Func<PartitionViewModel, DriveLetterDialogResult?>? PromptDriveLetter { get; set; }
     public Func<PartitionViewModel, LabelDialogResult?>? PromptLabel { get; set; }
     public Func<DiskViewModel, InitializeDiskDialogResult?>? PromptInitialize { get; set; }
+    public Func<DiskViewModel, IReadOnlyList<DiskViewModel>, CloneDiskDialogResult?>? PromptCloneDisk { get; set; }
+    public Func<PartitionViewModel, IReadOnlyList<DiskViewModel>, ClonePartitionDialogResult?>? PromptClonePartition { get; set; }
     public Func<IReadOnlyList<PendingOperation>, bool>? PromptApply { get; set; }
     public Action<PartitionViewModel>? ShowPartitionProperties { get; set; }
     public Action<DiskViewModel>? ShowDiskProperties { get; set; }
@@ -384,6 +386,78 @@ public partial class MainViewModel : ObservableObject
         });
     }
 
+    [RelayCommand(CanExecute = nameof(CanCloneDisk))]
+    private void CloneDisk()
+    {
+        var source = SelectedDisk ?? SelectedPartition?.Disk;
+        if (source is null)
+            return;
+        var result = PromptCloneDisk?.Invoke(source, Disks.ToList());
+        if (result is null)
+            return;
+        if (!ConfirmDestructive(
+                $"Clone Disk {result.Source.Number} onto Disk {result.Dest.Number}? " +
+                "Every partition on the destination will be destroyed after Apply."))
+            return;
+
+        var mode = result.Mode == CloneCopyMode.UsedData ? "used data" : "all sectors";
+        Queue(new PendingOperation
+        {
+            Kind = OperationKind.CloneDisk,
+            DiskNumber = result.Dest.Number,
+            Description = $"Clone Disk {result.Source.Number} to Disk {result.Dest.Number} ({mode})",
+            IsDestructive = true,
+            CloneDisk = new CloneDiskParams
+            {
+                SourceDisk = result.Source.Number,
+                DestDisk = result.Dest.Number,
+                Mode = result.Mode,
+                AlignToMegabyte = result.AlignToMegabyte,
+                ExpandLastPartition = result.ExpandLastPartition,
+                SourceIsBoot = result.Source.IsBoot || result.Source.IsSystem,
+                Style = result.Source.PartitionStyle,
+                DestSize = result.Dest.Model.Size,
+                SourceSlices = result.Source.Model.Segments.Select(CloneLayoutPlanner.ToSlice).ToList()
+            }
+        });
+    }
+
+    [RelayCommand(CanExecute = nameof(CanClonePartition))]
+    private void ClonePartition()
+    {
+        if (SelectedPartition is not { } source || source.IsUnallocated)
+            return;
+        var result = PromptClonePartition?.Invoke(source, Disks.ToList());
+        if (result is null)
+            return;
+        if (!ConfirmDestructive(
+                $"Clone {source.DisplayName} onto Disk {result.DestDisk}? " +
+                "The destination region will be overwritten after Apply."))
+            return;
+
+        var mode = result.Mode == CloneCopyMode.UsedData ? "used data" : "all sectors";
+        Queue(new PendingOperation
+        {
+            Kind = OperationKind.ClonePartition,
+            DiskNumber = result.DestDisk,
+            Offset = result.DestOffset,
+            Size = result.DestRegionSize,
+            Description = $"Clone {source.DisplayName} to Disk {result.DestDisk} ({mode})",
+            IsDestructive = true,
+            ClonePartition = new ClonePartitionParams
+            {
+                SourceDisk = source.DiskNumber,
+                DestDisk = result.DestDisk,
+                Source = CloneLayoutPlanner.ToSlice(source.Model),
+                DestOffset = result.DestOffset,
+                DestRegionSize = result.DestRegionSize,
+                Mode = result.Mode,
+                AlignToMegabyte = result.AlignToMegabyte,
+                FillRegion = result.FillRegion
+            }
+        });
+    }
+
     [RelayCommand(CanExecute = nameof(CanToggleOnline))]
     private void ToggleOnline()
     {
@@ -682,6 +756,32 @@ public partial class MainViewModel : ObservableObject
     private bool CanToggleOnline() => !IsBusy &&
                                       (SelectedDisk ?? SelectedPartition?.Disk) is { IsOptical: false } disk &&
                                       !disk.IsBoot && !disk.IsSystem;
+    private bool CanCloneDisk()
+    {
+        if (IsBusy)
+            return false;
+        var source = SelectedDisk ?? SelectedPartition?.Disk;
+        if (source is null || source.IsOptical || !source.IsInitialized ||
+            source.Segments.All(s => s.IsUnallocated))
+            return false;
+        return Disks.Any(d => IsCloneDiskDest(d, source));
+    }
+
+    private bool CanClonePartition()
+    {
+        if (!CanMutatePartition() || SelectedPartition is not { } source || source.IsUnallocated)
+            return false;
+        return Disks.SelectMany(d => d.Segments).Any(gap =>
+            gap.IsUnallocated &&
+            gap.Size >= source.Size &&
+            !gap.Disk.IsOptical && gap.Disk.IsInitialized && !gap.Disk.IsReadOnly && !gap.Disk.IsOffline &&
+            (gap.DiskNumber != source.DiskNumber ||
+             gap.Offset >= source.Offset + source.Size ||
+             source.Offset >= gap.Offset + gap.Size));
+    }
+
+    private static bool IsCloneDiskDest(DiskViewModel dest, DiskViewModel source) =>
+        dest.Number != source.Number && !dest.IsOptical && !dest.IsBoot && !dest.IsSystem && !dest.IsReadOnly;
     private bool CanCheck() => !IsBusy && SelectedPartition?.DriveLetter is not null;
     private bool CanShowPartitionProperties() => SelectedPartition is not null;
     private bool CanShowDiskProperties() => (SelectedDisk ?? SelectedPartition?.Disk) is not null;
@@ -728,6 +828,8 @@ public partial class MainViewModel : ObservableObject
         InitializeDiskCommand.NotifyCanExecuteChanged();
         ConvertStyleCommand.NotifyCanExecuteChanged();
         DeleteAllPartitionsCommand.NotifyCanExecuteChanged();
+        CloneDiskCommand.NotifyCanExecuteChanged();
+        ClonePartitionCommand.NotifyCanExecuteChanged();
         ToggleOnlineCommand.NotifyCanExecuteChanged();
         CheckPartitionCommand.NotifyCanExecuteChanged();
         PartitionPropertiesCommand.NotifyCanExecuteChanged();

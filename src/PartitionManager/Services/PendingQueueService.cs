@@ -75,8 +75,14 @@ public sealed class PendingQueueService
         for (var i = 0; i < snapshot.Count; i++)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            progress?.Report((int)Math.Round((i / (double)snapshot.Count) * 100));
-            var result = await _executor.ExecuteAsync(snapshot[i], cancellationToken).ConfigureAwait(false);
+            var index = i;
+            progress?.Report((int)Math.Round((index / (double)snapshot.Count) * 100));
+            var slice = new Progress<int>(p =>
+            {
+                var blended = (int)Math.Round(((index + p / 100.0) / snapshot.Count) * 100);
+                progress?.Report(Math.Clamp(blended, 0, 99));
+            });
+            var result = await _executor.ExecuteAsync(snapshot[i], cancellationToken, slice).ConfigureAwait(false);
             if (!result.Success)
             {
                 // Keep remaining operations; drop the ones that already ran.

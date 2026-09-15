@@ -5,7 +5,7 @@ Disk and partition manager — inspect disks, queue changes on a live map, and a
 ## Requirements
 
 - Windows 10/11
-- Administrator privileges for create / delete / format / resize / initialize
+- Administrator privileges for create / delete / format / resize / initialize / clone
 - For building: [.NET 8 SDK](https://dotnet.microsoft.com/download)
 
 ## Install (release packages)
@@ -13,7 +13,7 @@ Disk and partition manager — inspect disks, queue changes on a live map, and a
 Build installers:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\build-installer.ps1
+powershell -ExecutionPolicy Bypass -File .\build.ps1
 ```
 
 The installer creates **Start Menu** and **Desktop** shortcuts under Skywere Industries (both on by default; you can uncheck them).
@@ -22,7 +22,7 @@ The installer creates **Start Menu** and **Desktop** shortcuts under Skywere Ind
 
 1. Launch **Partition Manager** (UAC is offered on startup)
 2. Select a partition or unallocated region
-3. Queue create, delete, format, resize, drive letter, and related operations
+3. Queue create, delete, format, resize, clone, drive letter, and related operations
 4. Review **Pending operations**, then **Apply** or **Undo** / **Discard**
 
 ## License
