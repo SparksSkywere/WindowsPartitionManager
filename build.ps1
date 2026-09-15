@@ -72,7 +72,13 @@ Write-Host "`n[1/3] Publishing Partition Manager ($Runtime)..." -ForegroundColor
 $NugetOrg = 'https://api.nuget.org/v3/index.json'
 Write-Host "  Restoring packages from nuget.org..."
 # Restore projects individually — older SDKs cannot restore .slnx (MSB4068).
-foreach ($proj in @($AppProj, $MsiProj, $BundleProj)) {
+# App restore must include -r so project.assets.json has net8.0-windows/win-x64.
+Write-Host "    $(Split-Path $AppProj -Leaf) ($Runtime)"
+dotnet restore $AppProj --source $NugetOrg -r $Runtime
+if ($LASTEXITCODE -ne 0) {
+    throw "NuGet restore failed for $(Split-Path $AppProj -Leaf). nuget.org must be reachable (see nuget.config)."
+}
+foreach ($proj in @($MsiProj, $BundleProj)) {
     Write-Host "    $(Split-Path $proj -Leaf)"
     dotnet restore $proj --source $NugetOrg
     if ($LASTEXITCODE -ne 0) {
@@ -84,7 +90,6 @@ dotnet publish $AppProj `
     -c $Configuration `
     -r $Runtime `
     --self-contained true `
-    --no-restore `
     -p:PublishSingleFile=true `
     -p:IncludeNativeLibrariesForSelfExtract=true `
     -p:EnableCompressionInSingleFile=true `
