@@ -125,6 +125,7 @@ public sealed class SegmentModel
     public bool IsReadOnly { get; set; }
     public bool IsOffline { get; set; }
     public bool IsPending { get; set; }
+    public bool IsEncrypted { get; set; }
     public string Status { get; set; } = "";
     public string GptType { get; set; } = "";
     public ushort MbrType { get; set; }
@@ -138,7 +139,11 @@ public sealed class SegmentModel
             ? 0
             : Math.Clamp(Used * 100.0 / Size, 0, 100);
 
-    public bool IsProtected => IsBoot || IsSystem;
+    /// <summary>
+    /// True for the Windows boot volume (typically C:). EFI, MSR, and System Reserved
+    /// are system-related but remain operable so they can be resized or moved.
+    /// </summary>
+    public bool IsProtected => IsBoot;
 
     public SegmentModel Clone()
     {
@@ -162,6 +167,7 @@ public sealed class SegmentModel
             IsReadOnly = IsReadOnly,
             IsOffline = IsOffline,
             IsPending = IsPending,
+            IsEncrypted = IsEncrypted,
             Status = Status,
             GptType = GptType,
             MbrType = MbrType,

@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.2.0
+
+- EFI, MSR, and System Reserved can be resized and managed. Protect-system still blocks deleting the Windows boot volume.
+- Resize can use free space before a partition (**Move to start**).
+- Moving a partition copies data; end shrink/extend uses the Windows Resize API.
+- Apply no longer updates the partition list off the UI thread.
+- Device encryption must be turned off before changing an encrypted volume (including C:). Status shows Encrypted / Decrypting / Encrypting.
+- Moving C: left needs a local restart into Windows Recovery. Remote desktop and encryption block that path before any shrink runs.
+- Shorter UI wording for resize, Apply, and Recovery prompts.
+
 ## 1.1.0
 
 - Disk clone: copy a whole disk to another disk (used data or all sectors), with optional 1 MB alignment and expand of the last data partition when the destination is larger.

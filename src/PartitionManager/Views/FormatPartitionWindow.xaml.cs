@@ -15,9 +15,12 @@ public partial class FormatPartitionWindow : Window
         SummaryText.Text = $"Format {partition.DisplayName} ({partition.SizeText}).";
         foreach (var fs in new[] { "NTFS", "FAT32", "exFAT", "ReFS" })
             FileSystemBox.Items.Add(fs);
-        FileSystemBox.SelectedItem = string.IsNullOrWhiteSpace(partition.Model.FileSystem)
-            ? "NTFS"
+        var preferred = string.IsNullOrWhiteSpace(partition.Model.FileSystem)
+            ? partition.Kind == SegmentKind.Efi ? "FAT32" : "NTFS"
             : partition.Model.FileSystem.ToUpperInvariant();
+        if (preferred is "FAT" or "FAT16")
+            preferred = "FAT32";
+        FileSystemBox.SelectedItem = preferred;
         if (FileSystemBox.SelectedIndex < 0)
             FileSystemBox.SelectedIndex = 0;
         LabelBox.Text = partition.Model.Label;

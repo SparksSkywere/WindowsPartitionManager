@@ -14,6 +14,7 @@ public sealed class CreatePartitionDialogResult
 
 public sealed class ResizePartitionDialogResult
 {
+    public ulong NewOffset { get; init; }
     public ulong NewSize { get; init; }
 }
 

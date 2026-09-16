@@ -28,7 +28,7 @@ public sealed class PartitionOperationExecutor
                 OperationKind.CreatePartition => await Task.Run(() => CreatePartition(op), cancellationToken).ConfigureAwait(false),
                 OperationKind.DeletePartition => await Task.Run(() => DeletePartition(op), cancellationToken).ConfigureAwait(false),
                 OperationKind.FormatPartition => await Task.Run(() => FormatPartition(op), cancellationToken).ConfigureAwait(false),
-                OperationKind.ResizePartition => await Task.Run(() => ResizePartition(op), cancellationToken).ConfigureAwait(false),
+                OperationKind.ResizePartition => await Task.Run(() => ResizePartition(op, progress, cancellationToken), cancellationToken).ConfigureAwait(false),
                 OperationKind.ChangeDriveLetter => await Task.Run(() => ChangeDriveLetter(op), cancellationToken).ConfigureAwait(false),
                 OperationKind.ChangeLabel => await Task.Run(() => ChangeLabel(op), cancellationToken).ConfigureAwait(false),
                 OperationKind.HidePartition => await Task.Run(() => SetHidden(op, true), cancellationToken).ConfigureAwait(false),
@@ -83,7 +83,9 @@ public sealed class PartitionOperationExecutor
         if (disk is null)
             return Fail($"Disk {op.DiskNumber} not found.");
 
-        var inParams = disk.GetMethodParameters("CreatePartition");
+        var inParams = TryGetInParams(disk, "CreatePartition");
+        if (inParams is null)
+            return Fail("CreatePartition is not available on this disk.");
         inParams["Size"] = p.Size;
         inParams["UseMaximumSize"] = false;
         inParams["Offset"] = p.Offset;
@@ -136,7 +138,16 @@ public sealed class PartitionOperationExecutor
         using var part = GetPartition(op.DiskNumber, op.Offset);
         if (part is null)
             return Fail("Partition not found.");
-        return Invoke(part, "DeleteObject", part.GetMethodParameters("DeleteObject"));
+
+        var inParams = TryGetInParams(part, "DeleteObject");
+        if (inParams is not null)
+            return Invoke(part, "DeleteObject", inParams);
+
+        inParams = TryGetInParams(part, "Delete");
+        if (inParams is not null)
+            return Invoke(part, "Delete", inParams);
+
+        return Fail("This partition cannot be deleted through the storage API.");
     }
 
     private OperationResult FormatPartition(PendingOperation op)
@@ -146,7 +157,9 @@ public sealed class PartitionOperationExecutor
         if (volume is null)
             return Fail("Volume not found. The partition may not have a file system yet — create it first.");
 
-        var inParams = volume.GetMethodParameters("Format");
+        var inParams = TryGetInParams(volume, "Format");
+        if (inParams is null)
+            return Fail("Format is not available on this volume.");
         inParams["FileSystem"] = f.FileSystem;
         inParams["QuickFormat"] = f.QuickFormat;
         if (!string.IsNullOrWhiteSpace(f.Label))
@@ -157,15 +170,39 @@ public sealed class PartitionOperationExecutor
         return Invoke(volume, "Format", inParams);
     }
 
-    private OperationResult ResizePartition(PendingOperation op)
+    private OperationResult ResizePartition(PendingOperation op, IProgress<int>? progress, CancellationToken cancellationToken)
     {
         var r = op.Resize ?? throw new InvalidOperationException("Resize parameters missing.");
+        if (r.ChangeOffset)
+            return new DiskCloneService(_log, this).MovePartition(op, progress, cancellationToken);
+
         using var part = GetPartition(op.DiskNumber, op.Offset);
         if (part is null)
             return Fail("Partition not found.");
-        var inParams = part.GetMethodParameters("Resize");
+        var inParams = TryGetInParams(part, "Resize");
+        if (inParams is null)
+        {
+            if (r.Kind == SegmentKind.MicrosoftReserved || string.IsNullOrWhiteSpace(r.FileSystem))
+                return RecreatePartition(op.DiskNumber, op.Offset, r);
+            return Fail("Windows cannot resize this partition in place. Move it, or delete and recreate it.");
+        }
         inParams["Size"] = r.NewSize;
         return Invoke(part, "Resize", inParams);
+    }
+
+    private OperationResult RecreatePartition(int diskNumber, ulong offset, ResizePartitionParams r)
+    {
+        var deleted = DeletePartitionAt(diskNumber, offset);
+        if (!deleted.Success)
+            return deleted;
+
+        Thread.Sleep(400);
+        return CreatePartitionRaw(
+            diskNumber,
+            offset,
+            r.NewSize,
+            CloneLayoutPlanner.GptTypeFor(new CloneSlice { GptType = r.GptType, Kind = r.Kind }),
+            r.MbrType);
     }
 
     private OperationResult ChangeDriveLetter(PendingOperation op)
@@ -177,7 +214,9 @@ public sealed class PartitionOperationExecutor
         var existing = DiskInventoryService.GetLetter(part["DriveLetter"]);
         if (existing is char oldLetter)
         {
-            var remove = part.GetMethodParameters("RemoveAccessPath");
+            var remove = TryGetInParams(part, "RemoveAccessPath");
+            if (remove is null)
+                return Fail("RemoveAccessPath is not available.");
             remove["AccessPath"] = $"{oldLetter}:";
             var removed = Invoke(part, "RemoveAccessPath", remove);
             if (!removed.Success)
@@ -187,7 +226,9 @@ public sealed class PartitionOperationExecutor
         if (op.DriveLetter is not char letter)
             return Ok("Drive letter removed.");
 
-        var add = part.GetMethodParameters("AddAccessPath");
+        var add = TryGetInParams(part, "AddAccessPath");
+        if (add is null)
+            return Fail("AddAccessPath is not available.");
         add["AccessPath"] = $"{letter}:";
         add["AssignDriveLetter"] = true;
         return Invoke(part, "AddAccessPath", add);
@@ -217,7 +258,9 @@ public sealed class PartitionOperationExecutor
         if (part is null)
             return Fail("Partition not found.");
 
-        var inParams = part.GetMethodParameters("SetAttributes");
+        var inParams = TryGetInParams(part, "SetAttributes");
+        if (inParams is null)
+            return Fail("SetAttributes is not available on this partition.");
         inParams["IsHidden"] = hidden;
         var result = Invoke(part, "SetAttributes", inParams);
         if (!result.Success)
@@ -228,7 +271,9 @@ public sealed class PartitionOperationExecutor
             var letter = DiskInventoryService.GetLetter(part["DriveLetter"]);
             if (letter is char c)
             {
-                var remove = part.GetMethodParameters("RemoveAccessPath");
+                var remove = TryGetInParams(part, "RemoveAccessPath");
+                if (remove is null)
+                    return result;
                 remove["AccessPath"] = $"{c}:";
                 Invoke(part, "RemoveAccessPath", remove);
             }
@@ -242,7 +287,9 @@ public sealed class PartitionOperationExecutor
         using var part = GetPartition(op.DiskNumber, op.Offset);
         if (part is null)
             return Fail("Partition not found.");
-        var inParams = part.GetMethodParameters("SetAttributes");
+        var inParams = TryGetInParams(part, "SetAttributes");
+        if (inParams is null)
+            return Fail("SetAttributes is not available on this partition.");
         inParams["IsActive"] = true;
         return Invoke(part, "SetAttributes", inParams);
     }
@@ -253,7 +300,9 @@ public sealed class PartitionOperationExecutor
         if (disk is null)
             return Fail($"Disk {op.DiskNumber} not found.");
         var style = op.TargetStyle == PartitionStyleKind.Mbr ? (ushort)1 : (ushort)2;
-        var inParams = disk.GetMethodParameters("Initialize");
+        var inParams = TryGetInParams(disk, "Initialize");
+        if (inParams is null)
+            return Fail("Initialize is not available on this disk.");
         inParams["PartitionStyle"] = style;
         return Invoke(disk, "Initialize", inParams);
     }
@@ -264,7 +313,9 @@ public sealed class PartitionOperationExecutor
         if (disk is null)
             return Fail($"Disk {op.DiskNumber} not found.");
         var style = op.TargetStyle == PartitionStyleKind.Mbr ? (ushort)1 : (ushort)2;
-        var inParams = disk.GetMethodParameters("ConvertStyle");
+        var inParams = TryGetInParams(disk, "ConvertStyle");
+        if (inParams is null)
+            return Fail("ConvertStyle is not available on this disk.");
         inParams["PartitionStyle"] = style;
         return Invoke(disk, "ConvertStyle", inParams);
     }
@@ -274,7 +325,9 @@ public sealed class PartitionOperationExecutor
         using var disk = GetDisk(op.DiskNumber);
         if (disk is null)
             return Fail($"Disk {op.DiskNumber} not found.");
-        var inParams = disk.GetMethodParameters("Clear");
+        var inParams = TryGetInParams(disk, "Clear");
+        if (inParams is null)
+            return Fail("Clear is not available on this disk.");
         inParams["RemoveData"] = true;
         inParams["RemoveOEM"] = true;
         inParams["ZeroOutEntireDisk"] = false;
@@ -302,7 +355,7 @@ public sealed class PartitionOperationExecutor
         if (disk is null)
             return Fail($"Disk {diskNumber} not found.");
         var method = online ? "Online" : "Offline";
-        return Invoke(disk, method, disk.GetMethodParameters(method));
+        return Invoke(disk, method, TryGetInParams(disk, method));
     }
 
     internal OperationResult ClearDisk(int diskNumber) =>
@@ -323,6 +376,23 @@ public sealed class PartitionOperationExecutor
             DiskNumber = diskNumber,
             Offset = offset,
             Resize = new ResizePartitionParams { NewSize = newSize }
+        }, progress: null, CancellationToken.None);
+
+    internal OperationResult DeletePartitionAt(int diskNumber, ulong offset) =>
+        DeletePartition(new PendingOperation
+        {
+            Kind = OperationKind.DeletePartition,
+            DiskNumber = diskNumber,
+            Offset = offset
+        });
+
+    internal OperationResult AssignDriveLetter(int diskNumber, ulong offset, char? letter) =>
+        ChangeDriveLetter(new PendingOperation
+        {
+            Kind = OperationKind.ChangeDriveLetter,
+            DiskNumber = diskNumber,
+            Offset = offset,
+            DriveLetter = letter
         });
 
     internal OperationResult SetActive(int diskNumber, ulong offset) =>
@@ -347,7 +417,9 @@ public sealed class PartitionOperationExecutor
         if (disk is null)
             return Fail($"Disk {diskNumber} not found.");
 
-        var inParams = disk.GetMethodParameters("CreatePartition");
+        var inParams = TryGetInParams(disk, "CreatePartition");
+        if (inParams is null)
+            return Fail("CreatePartition is not available on this disk.");
         inParams["Size"] = size;
         inParams["UseMaximumSize"] = false;
         inParams["Offset"] = offset;
@@ -468,8 +540,11 @@ public sealed class PartitionOperationExecutor
         return scope;
     }
 
-    private OperationResult Invoke(ManagementObject mo, string method, ManagementBaseObject inParams)
+    private OperationResult Invoke(ManagementObject mo, string method, ManagementBaseObject? inParams)
     {
+        if (inParams is null)
+            return Fail($"{method} is not available on this object.");
+
         ManagementBaseObject? output = null;
         try
         {
@@ -497,6 +572,18 @@ public sealed class PartitionOperationExecutor
         {
             output?.Dispose();
             inParams.Dispose();
+        }
+    }
+
+    private static ManagementBaseObject? TryGetInParams(ManagementObject mo, string method)
+    {
+        try
+        {
+            return mo.GetMethodParameters(method);
+        }
+        catch
+        {
+            return null;
         }
     }
 

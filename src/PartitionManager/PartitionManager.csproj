@@ -21,11 +21,12 @@
     <Authors>Skywere Industries</Authors>
     <Copyright>Copyright © Skywere Industries</Copyright>
     <Description>Manage disks and partitions on Windows: create, delete, format, resize, clone, change drive letters and labels, initialize MBR/GPT, and apply queued operations with a live disk map preview.</Description>
-    <Version>1.1.0</Version>
-    <FileVersion>1.1.0</FileVersion>
-    <AssemblyVersion>1.1.0.0</AssemblyVersion>
+    <Version>1.2.0</Version>
+    <FileVersion>1.2.0</FileVersion>
+    <AssemblyVersion>1.2.0.0</AssemblyVersion>
     <NeutralLanguage>en-US</NeutralLanguage>
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+    <StartupObject>PartitionManager.Program</StartupObject>
   </PropertyGroup>
 
   <ItemGroup>

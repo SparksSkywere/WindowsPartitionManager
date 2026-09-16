@@ -98,6 +98,7 @@ public partial class PartitionViewModel : ObservableObject
     public string MapToolTip =>
         $"{DisplayName}\n{TypeText}  {SizeText}" +
         (string.IsNullOrEmpty(FileSystemText) ? "" : $"  {FileSystemText}") +
+        (Model.IsEncrypted ? "\nEncrypted" : "") +
         $"\nOffset {OffsetText}";
 
     private string DefaultLabel() => Kind switch

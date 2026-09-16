@@ -38,7 +38,20 @@ public partial class App : Application
             args.SetObserved();
         };
 
-        if (!CliHost.ShouldRunCli(e.Args) && ElevationHelper.TryRelaunchElevated(e.Args))
+        if (CliHost.ShouldRunCli(e.Args))
+        {
+            EnsureConsole();
+            ShutdownMode = ShutdownMode.OnExplicitShutdown;
+            _log = new LogService();
+            var cliConfig = new ConfigService();
+            var inventory = new DiskInventoryService(_log);
+            var executor = new PartitionOperationExecutor(_log);
+            var code = await CliHost.RunAsync(e.Args, inventory, executor, cliConfig, _log).ConfigureAwait(true);
+            Shutdown(code);
+            return;
+        }
+
+        if (ElevationHelper.TryRelaunchElevated(e.Args))
         {
             Shutdown(0);
             return;
@@ -50,25 +63,14 @@ public partial class App : Application
         _log = new LogService();
         if (ElevationHelper.IsElevated())
             _log.Info("Running with administrator privileges.");
-        else if (CliHost.ShouldRunCli(e.Args))
-            _log.Info("CLI mode without administrator privileges.");
         else
             _log.Info("Running without administrator privileges (UAC declined or unavailable). Partition changes require elevation.");
 
-        var inventory = new DiskInventoryService(_log);
-        var executor = new PartitionOperationExecutor(_log);
-        var queue = new PendingQueueService(inventory, executor, _log);
+        var guiInventory = new DiskInventoryService(_log);
+        var guiExecutor = new PartitionOperationExecutor(_log);
+        var queue = new PendingQueueService(guiInventory, guiExecutor, _log);
 
-        if (CliHost.ShouldRunCli(e.Args))
-        {
-            EnsureConsole();
-            ShutdownMode = ShutdownMode.OnExplicitShutdown;
-            var code = await CliHost.RunAsync(e.Args, inventory, config, _log).ConfigureAwait(true);
-            Shutdown(code);
-            return;
-        }
-
-        var mainVm = new MainViewModel(queue, executor, config, _log);
+        var mainVm = new MainViewModel(queue, guiExecutor, config, _log);
         var window = new MainWindow(mainVm, config);
         MainWindow = window;
         window.Show();

@@ -177,53 +177,60 @@ public static class LayoutPreview
         if (seg is null || r is null || seg.IsUnallocated)
             return;
 
+        var region = GetResizeRegion(disk!, seg);
         var newSize = ByteSizeFormatter.AlignDown(r.NewSize, Alignment);
-        if (newSize < Alignment)
-            return;
+        if (newSize < region.MinSize)
+            newSize = region.MinSize;
 
-        if (newSize == seg.Size)
-            return;
-
-        if (newSize < seg.Size)
+        var newOffset = r.ChangeOffset
+            ? ByteSizeFormatter.AlignDown(r.NewOffset, Alignment)
+            : seg.Offset;
+        if (newOffset < region.SpanStart)
+            newOffset = region.SpanStart;
+        if (newOffset + newSize > region.SpanEnd)
         {
-            var freed = seg.Size - newSize;
-            seg.Size = newSize;
-            if (seg.SizeRemaining > seg.Size)
-                seg.SizeRemaining = seg.Size;
-            disk!.Segments.Add(new SegmentModel
-            {
-                DiskNumber = disk.Number,
-                IsUnallocated = true,
-                Offset = seg.Offset + seg.Size,
-                Size = freed,
-                Kind = SegmentKind.Unallocated,
-                Status = "Unallocated",
-                SizeRemaining = freed,
-                IsPending = true
-            });
-        }
-        else
-        {
-            var extra = newSize - seg.Size;
-            var after = disk!.Segments
-                .Where(s => s.IsUnallocated && s.Offset == seg.Offset + seg.Size)
-                .OrderBy(s => s.Offset)
-                .FirstOrDefault();
-            if (after is null || after.Size < extra)
+            var fit = ByteSizeFormatter.AlignDown(region.SpanEnd - newOffset, Alignment);
+            if (fit < region.MinSize)
                 return;
-
-            seg.Size = newSize;
-            after.Offset += extra;
-            after.Size -= extra;
-            after.SizeRemaining = after.Size;
-            if (after.Size < DiskInventoryService.MinUnallocatedBytes)
-                disk.Segments.Remove(after);
+            newSize = fit;
         }
 
-        seg.Status = "Pending resize";
+        if (newOffset == seg.Offset && newSize == seg.Size)
+            return;
+
+        disk!.Segments.RemoveAll(s =>
+            s.IsUnallocated &&
+            s.Offset >= region.SpanStart &&
+            s.Offset + s.Size <= region.SpanEnd);
+
+        AddGap(disk, region.SpanStart, newOffset - region.SpanStart);
+        seg.Offset = newOffset;
+        seg.Size = newSize;
+        if (seg.SizeRemaining > seg.Size)
+            seg.SizeRemaining = seg.Size;
+        AddGap(disk, newOffset + newSize, region.SpanEnd - (newOffset + newSize));
+
+        seg.Status = r.ChangeOffset ? "Pending move" : "Pending resize";
         seg.IsPending = true;
-        disk!.Segments = disk.Segments.OrderBy(s => s.Offset).ToList();
+        disk.Segments = disk.Segments.OrderBy(s => s.Offset).ToList();
         MergeUnallocated(disk);
+    }
+
+    private static void AddGap(DiskModel disk, ulong offset, ulong size)
+    {
+        if (size < Alignment)
+            return;
+        disk.Segments.Add(new SegmentModel
+        {
+            DiskNumber = disk.Number,
+            IsUnallocated = true,
+            Offset = offset,
+            Size = size,
+            Kind = SegmentKind.Unallocated,
+            Status = "Unallocated",
+            SizeRemaining = size,
+            IsPending = true
+        });
     }
 
     private static void ApplyLetter(DiskLayout layout, PendingOperation op)
@@ -506,17 +513,37 @@ public static class LayoutPreview
         disk.Segments = merged;
     }
 
-    public static (ulong Min, ulong Max) ResizeBounds(DiskModel disk, SegmentModel segment)
+    public readonly record struct ResizeRegion(
+        ulong SpanStart,
+        ulong SpanEnd,
+        ulong MinSize,
+        ulong Offset,
+        ulong Size)
     {
-        var used = segment.Used;
-        var min = Math.Max(Alignment, ByteSizeFormatter.AlignUp(used + Alignment, Alignment));
-        var max = segment.Size;
+        public ulong SpanLength => SpanEnd > SpanStart ? SpanEnd - SpanStart : 0;
+    }
+
+    public static ResizeRegion GetResizeRegion(DiskModel disk, SegmentModel segment)
+    {
+        var before = disk.Segments
+            .Where(s => s.IsUnallocated && s.Offset + s.Size == segment.Offset)
+            .Sum(s => (decimal)s.Size);
         var after = disk.Segments
             .Where(s => s.IsUnallocated && s.Offset == segment.Offset + segment.Size)
             .Sum(s => (decimal)s.Size);
-        max += (ulong)after;
-        if (min > max)
+
+        var spanStart = segment.Offset - (ulong)before;
+        var spanEnd = segment.Offset + segment.Size + (ulong)after;
+        var used = string.IsNullOrEmpty(segment.FileSystem) ? 0UL : segment.Used;
+        var min = Math.Max(Alignment, ByteSizeFormatter.AlignUp(used == 0 ? Alignment : used, Alignment));
+        if (spanEnd > spanStart && min > spanEnd - spanStart)
             min = Alignment;
-        return (min, max);
+        return new ResizeRegion(spanStart, spanEnd, min, segment.Offset, segment.Size);
+    }
+
+    public static (ulong Min, ulong Max) ResizeBounds(DiskModel disk, SegmentModel segment)
+    {
+        var region = GetResizeRegion(disk, segment);
+        return (region.MinSize, region.SpanLength);
     }
 }

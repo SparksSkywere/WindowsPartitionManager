@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.IO;
 using System.Windows;
 using System.Windows.Data;
 using PartitionManager.Helpers;
@@ -60,6 +61,7 @@ public partial class MainViewModel : ObservableObject
     public Func<DiskViewModel, IReadOnlyList<DiskViewModel>, CloneDiskDialogResult?>? PromptCloneDisk { get; set; }
     public Func<PartitionViewModel, IReadOnlyList<DiskViewModel>, ClonePartitionDialogResult?>? PromptClonePartition { get; set; }
     public Func<IReadOnlyList<PendingOperation>, bool>? PromptApply { get; set; }
+    public Func<string, bool>? PromptEncryptionRequired { get; set; }
     public Action<PartitionViewModel>? ShowPartitionProperties { get; set; }
     public Action<DiskViewModel>? ShowDiskProperties { get; set; }
 
@@ -112,6 +114,33 @@ public partial class MainViewModel : ObservableObject
     [RelayCommand]
     private async Task LoadedAsync()
     {
+        var offline = new OfflineApplyService(_log);
+        try
+        {
+            await offline.RestoreRecoveryAsync().ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            _log.Warn("Could not restore Windows Recovery files: " + ex.Message);
+        }
+
+        var status = offline.ReadStatus();
+        if (!string.IsNullOrWhiteSpace(status))
+        {
+            offline.ClearStatus();
+            var ok = status.StartsWith("ok", StringComparison.OrdinalIgnoreCase);
+            MessageBox.Show(
+                status,
+                AppInfo.ProductName,
+                MessageBoxButton.OK,
+                ok ? MessageBoxImage.Information : MessageBoxImage.Warning);
+            StatusText = status;
+        }
+        else if (File.Exists(OfflineApplyService.JobPath))
+        {
+            StatusText = "Windows volume move waiting — restart to finish.";
+        }
+
         if (_config.Config.General.RefreshOnLaunch)
             await RefreshAsync().ConfigureAwait(true);
     }
@@ -182,6 +211,8 @@ public partial class MainViewModel : ObservableObject
     {
         if (SelectedPartition is not { } seg || seg.IsUnallocated)
             return;
+        if (!EnsureEncryptionOff(seg))
+            return;
         if (!ConfirmDestructive($"Delete {seg.DisplayName} on Disk {seg.DiskNumber}? The data will be unrecoverable after Apply."))
             return;
 
@@ -201,6 +232,8 @@ public partial class MainViewModel : ObservableObject
     private void FormatPartition()
     {
         if (SelectedPartition is not { } seg || seg.IsUnallocated)
+            return;
+        if (!EnsureEncryptionOff(seg))
             return;
         var result = PromptFormat?.Invoke(seg);
         if (result is null)
@@ -232,11 +265,27 @@ public partial class MainViewModel : ObservableObject
     {
         if (SelectedPartition is not { } seg || seg.IsUnallocated)
             return;
+        if (!EnsureEncryptionOff(seg))
+            return;
         var result = PromptResize?.Invoke(seg);
-        if (result is null || result.NewSize == seg.Size)
+        if (result is null)
+            return;
+        var offsetChanged = result.NewOffset != seg.Offset;
+        if (!offsetChanged && result.NewSize == seg.Size)
             return;
 
-        var verb = result.NewSize > seg.Size ? "Extend" : "Shrink";
+        if (offsetChanged)
+        {
+            var msg = WindowsVolume.IsOnlineSystemVolume(seg.DriveLetter, seg.Model.IsBoot)
+                ? $"Move {seg.DisplayName}? Data is copied, then Windows restarts to finish."
+                : $"Move {seg.DisplayName}? Data is copied and the partition is recreated.";
+            if (!ConfirmDestructive(msg))
+                return;
+        }
+
+        var verb = offsetChanged
+            ? "Move"
+            : result.NewSize > seg.Size ? "Extend" : "Shrink";
         Queue(new PendingOperation
         {
             Kind = OperationKind.ResizePartition,
@@ -244,8 +293,24 @@ public partial class MainViewModel : ObservableObject
             SegmentId = seg.Id,
             Offset = seg.Offset,
             Size = seg.Size,
-            Description = $"{verb} {seg.DisplayName} to {ByteSizeFormatter.Format(result.NewSize)}",
-            Resize = new ResizePartitionParams { NewSize = result.NewSize }
+            Description = offsetChanged
+                ? $"{verb} {seg.DisplayName} to offset {ByteSizeFormatter.Format(result.NewOffset)}, {ByteSizeFormatter.Format(result.NewSize)}"
+                : $"{verb} {seg.DisplayName} to {ByteSizeFormatter.Format(result.NewSize)}",
+            IsDestructive = offsetChanged,
+            Resize = new ResizePartitionParams
+            {
+                NewSize = result.NewSize,
+                NewOffset = result.NewOffset,
+                ChangeOffset = offsetChanged,
+                GptType = seg.Model.GptType,
+                MbrType = seg.Model.MbrType,
+                IsActive = seg.Model.IsActive,
+                IsHidden = seg.Model.IsHidden,
+                DriveLetter = seg.DriveLetter,
+                FileSystem = seg.Model.FileSystem,
+                Kind = seg.Kind,
+                IsBoot = seg.Model.IsBoot
+            }
         });
     }
 
@@ -392,6 +457,11 @@ public partial class MainViewModel : ObservableObject
         var source = SelectedDisk ?? SelectedPartition?.Disk;
         if (source is null)
             return;
+        var encrypted = source.Segments.FirstOrDefault(s =>
+            !s.IsUnallocated && s.DriveLetter is char letter &&
+            (s.Model.IsEncrypted || VolumeEncryption.IsProtected(letter)));
+        if (encrypted is not null && !EnsureEncryptionOff(encrypted))
+            return;
         var result = PromptCloneDisk?.Invoke(source, Disks.ToList());
         if (result is null)
             return;
@@ -426,6 +496,8 @@ public partial class MainViewModel : ObservableObject
     private void ClonePartition()
     {
         if (SelectedPartition is not { } source || source.IsUnallocated)
+            return;
+        if (!EnsureEncryptionOff(source))
             return;
         var result = PromptClonePartition?.Invoke(source, Disks.ToList());
         if (result is null)
@@ -529,18 +601,24 @@ public partial class MainViewModel : ObservableObject
                 IsProgressIndeterminate = false;
                 ProgressPercentText = $"{v}%";
             });
-            var result = await _queue.ApplyAsync(progress, ct).ConfigureAwait(true);
+            var restartJobs = new List<OfflineMoveJob>();
+            var result = await _queue.ApplyAsync(progress, ct, restartJobs).ConfigureAwait(true);
             await _queue.RefreshAsync(_config.Config.Display, ct).ConfigureAwait(true);
             RebuildViews();
             if (result.Success)
             {
                 StatusText = result.Message;
                 _log.Success(result.Message);
+                if (result.RestartRequired && restartJobs.Count > 0)
+                    await ScheduleRecoveryMoveAsync(restartJobs, ct).ConfigureAwait(true);
             }
             else
             {
                 StatusText = "Apply failed: " + result.Message;
-                MessageBox.Show(result.Message, AppInfo.ProductName, MessageBoxButton.OK, MessageBoxImage.Error);
+                if (result.Message.Contains("device encryption", StringComparison.OrdinalIgnoreCase))
+                    PromptEncryptionRequired?.Invoke("the Windows volume");
+                else
+                    MessageBox.Show(result.Message, AppInfo.ProductName, MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }).ConfigureAwait(true);
     }
@@ -633,6 +711,12 @@ public partial class MainViewModel : ObservableObject
 
     private void RebuildViews()
     {
+        if (!UiThread.CheckAccess())
+        {
+            UiThread.Send(RebuildViews);
+            return;
+        }
+
         var keep = _selectedId ?? SelectedPartition?.Id;
         Disks.Clear();
         Partitions.Clear();
@@ -676,6 +760,70 @@ public partial class MainViewModel : ObservableObject
                p.DiskText.Contains(q, StringComparison.OrdinalIgnoreCase) ||
                p.LabelText.Contains(q, StringComparison.OrdinalIgnoreCase) ||
                p.DriveText.Contains(q, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private async Task ScheduleRecoveryMoveAsync(IReadOnlyList<OfflineMoveJob> jobs, CancellationToken cancellationToken)
+    {
+        if (SessionMode.IsRemoteDesktop())
+        {
+            StatusText = "Move needs a local session.";
+            MessageBox.Show(
+                WindowsVolume.RemoteRecoveryBlockedMessage,
+                AppInfo.ProductName,
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+            return;
+        }
+
+        foreach (var job in jobs)
+        {
+            if (job.DriveLetter is not char letter)
+                continue;
+            if (!VolumeEncryption.IsProtected(letter))
+                continue;
+
+            PromptEncryptionRequired?.Invoke(letter + ":");
+            StatusText = "Turn off device encryption first.";
+            return;
+        }
+
+        var offline = new OfflineApplyService(_log);
+        offline.SaveJobs(jobs);
+        var prep = await offline.PrepareRecoveryAsync(cancellationToken).ConfigureAwait(true);
+        if (!prep.Success || !prep.UnattendedReady)
+        {
+            StatusText = prep.Message;
+            MessageBox.Show(prep.Message, AppInfo.ProductName, MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        StatusText = prep.Message;
+        var restart = MessageBox.Show(
+            "Restart now to finish moving the Windows volume?",
+            AppInfo.ProductName,
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Question,
+            MessageBoxResult.No);
+        if (restart == MessageBoxResult.Yes)
+            OfflineApplyService.RestartNow();
+    }
+
+    private bool EnsureEncryptionOff(PartitionViewModel seg)
+    {
+        if (seg.DriveLetter is not char letter)
+            return true;
+        if (!seg.Model.IsEncrypted && !VolumeEncryption.IsProtected(letter))
+            return true;
+
+        if (PromptEncryptionRequired is not null)
+            PromptEncryptionRequired(seg.DisplayName);
+        else
+            MessageBox.Show(
+                "Turn off device encryption on " + seg.DisplayName + " first.",
+                AppInfo.ProductName,
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+        return false;
     }
 
     private bool ConfirmDestructive(string message)
@@ -731,16 +879,13 @@ public partial class MainViewModel : ObservableObject
     private bool CanDelete() => CanMutatePartition() && !SelectedPartition!.IsUnallocated &&
                                 !IsProtected(SelectedPartition);
     private bool CanFormat() => CanMutatePartition() && !SelectedPartition!.IsUnallocated &&
-                                SelectedPartition.Kind is not (SegmentKind.MicrosoftReserved or SegmentKind.Efi) &&
                                 !IsProtected(SelectedPartition);
-    private bool CanResize() => CanMutatePartition() && !SelectedPartition!.IsUnallocated &&
-                                SelectedPartition.Kind is not (SegmentKind.MicrosoftReserved or SegmentKind.Efi);
-    private bool CanChangeLetter() => CanMutatePartition() && !SelectedPartition!.IsUnallocated &&
-                                      SelectedPartition.Kind is not SegmentKind.MicrosoftReserved;
+    private bool CanResize() => CanMutatePartition() && !SelectedPartition!.IsUnallocated;
+    private bool CanChangeLetter() => CanMutatePartition() && !SelectedPartition!.IsUnallocated;
     private bool CanChangeLabel() => CanMutatePartition() && !SelectedPartition!.IsUnallocated &&
                                      !string.IsNullOrEmpty(SelectedPartition.Model.FileSystem);
     private bool CanHide() => CanMutatePartition() && !SelectedPartition!.IsUnallocated &&
-                              !SelectedPartition.IsProtected;
+                              !IsProtected(SelectedPartition);
     private bool CanSetActive() => CanMutatePartition() && !SelectedPartition!.IsUnallocated &&
                                    SelectedPartition.Disk.PartitionStyle == PartitionStyleKind.Mbr &&
                                    SelectedPartition.Kind == SegmentKind.Primary;

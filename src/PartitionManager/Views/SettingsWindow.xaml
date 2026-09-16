@@ -47,8 +47,10 @@
                         <TextBlock Text="Safety" Style="{StaticResource SectionHeaderStyle}" Margin="0,18,0,8"/>
                         <CheckBox Content="Confirm destructive operations (delete, format, convert)"
                                   IsChecked="{Binding ConfirmDestructive}"/>
-                        <CheckBox Content="Protect boot and system partitions from delete / format / hide"
+                        <CheckBox Content="Protect the Windows boot volume from delete / format / hide"
                                   IsChecked="{Binding ProtectSystemPartitions}"/>
+                        <TextBlock Text="Keeps the Windows boot volume (usually C:) from delete, format, and hide. EFI and MSR stay operable."
+                                   Style="{StaticResource MutedTextStyle}" Margin="20,4,0,0" TextWrapping="Wrap"/>
 
                         <TextBlock Text="Feedback" Style="{StaticResource SectionHeaderStyle}" Margin="0,18,0,8"/>
                         <Button Content="Open GitHub feedback…" HorizontalAlignment="Left"

@@ -70,6 +70,12 @@ public partial class MainWindow : Window
             var w = new ApplyOperationsWindow(ops) { Owner = this };
             return w.ShowDialog() == true;
         };
+        viewModel.PromptEncryptionRequired = name =>
+        {
+            var w = new EncryptionRequiredWindow(name) { Owner = this };
+            w.ShowDialog();
+            return false;
+        };
         viewModel.ShowPartitionProperties = p =>
         {
             var w = new PropertiesWindow(p) { Owner = this };

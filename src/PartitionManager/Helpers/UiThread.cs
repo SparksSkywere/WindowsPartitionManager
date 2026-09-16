@@ -1,4 +1,4 @@
-﻿using System.Windows;
+using System.Windows;
 using System.Windows.Threading;
 
 namespace PartitionManager.Helpers;
@@ -6,6 +6,12 @@ namespace PartitionManager.Helpers;
 /// <summary>Marshal work onto the WPF UI thread safely.</summary>
 internal static class UiThread
 {
+    public static bool CheckAccess()
+    {
+        var dispatcher = Application.Current?.Dispatcher;
+        return dispatcher is null || dispatcher.CheckAccess();
+    }
+
     public static void Post(Action action)
     {
         var dispatcher = Application.Current?.Dispatcher;

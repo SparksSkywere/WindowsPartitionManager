@@ -107,6 +107,7 @@ public sealed class DiskInventoryService
         {
             Disks = disks.OrderBy(d => d.IsOptical).ThenBy(d => d.Number).ToList()
         };
+        VolumeEncryption.ApplyTo(layout.Disks.SelectMany(d => d.Segments));
 
         _log.Info($"Inventory: {layout.Disks.Count} disk(s), {layout.Disks.Sum(d => d.Segments.Count(s => !s.IsUnallocated))} partition(s).");
         return layout;
@@ -444,6 +445,7 @@ public sealed class DiskInventoryService
             _log.Error("Win32 disk query failed: " + ex.Message);
         }
 
+        VolumeEncryption.ApplyTo(layout.Disks.SelectMany(d => d.Segments));
         return layout;
     }
 

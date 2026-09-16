@@ -12,6 +12,7 @@ public static class CliHost
         var set = new HashSet<string>(args, StringComparer.OrdinalIgnoreCase);
         return set.Contains("--no-ui") ||
                set.Contains("--list") ||
+               set.Contains("--offline-apply") ||
                set.Contains("--help") ||
                set.Contains("-h") ||
                set.Contains("/?");
@@ -20,6 +21,7 @@ public static class CliHost
     public static async Task<int> RunAsync(
         string[] args,
         DiskInventoryService inventory,
+        PartitionOperationExecutor executor,
         ConfigService config,
         LogService log)
     {
@@ -28,6 +30,13 @@ public static class CliHost
         {
             PrintHelp();
             return 0;
+        }
+
+        if (set.Contains("--offline-apply"))
+        {
+            var offline = new OfflineApplyService(log);
+            return await offline.RunJobAsync(GetOption(args, "--job"), executor, CancellationToken.None)
+                .ConfigureAwait(false);
         }
 
         try
@@ -77,8 +86,21 @@ public static class CliHost
 
             Options:
               --list --no-ui    Print disks and partitions to the console
+              --offline-apply   Finish a scheduled Windows volume move (Windows Recovery)
+              --job <path>      Job file for --offline-apply
               --no-elevate      Do not prompt for administrator elevation
               --help, -h, /?    Show this help
             """);
+    }
+
+    private static string? GetOption(string[] args, string name)
+    {
+        for (var i = 0; i < args.Length - 1; i++)
+        {
+            if (args[i].Equals(name, StringComparison.OrdinalIgnoreCase))
+                return args[i + 1];
+        }
+
+        return null;
     }
 }

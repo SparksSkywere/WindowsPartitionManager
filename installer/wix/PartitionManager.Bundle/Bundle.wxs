@@ -15,7 +15,7 @@
      xmlns:bal="http://wixtoolset.org/schemas/v4/wxs/bal">
 
   <Bundle Name="Partition Manager"
-          Version="1.1.0"
+          Version="1.2.0"
           Manufacturer="Skywere Industries"
           UpgradeCode="A3C7D825-1F4E-48B9-9D60-2E8A4B5C7D91"
           Copyright="Copyright (c) Skywere Industries"

@@ -64,6 +64,16 @@ public sealed class FormatPartitionParams
 public sealed class ResizePartitionParams
 {
     public ulong NewSize { get; init; }
+    public ulong NewOffset { get; init; }
+    public bool ChangeOffset { get; init; }
+    public string GptType { get; init; } = "";
+    public ushort MbrType { get; init; }
+    public bool IsActive { get; init; }
+    public bool IsHidden { get; init; }
+    public char? DriveLetter { get; init; }
+    public string FileSystem { get; init; } = "";
+    public SegmentKind Kind { get; init; }
+    public bool IsBoot { get; init; }
 }
 
 public enum CloneCopyMode
@@ -116,4 +126,6 @@ public sealed class OperationResult
     public bool Success { get; init; }
     public string Message { get; init; } = "";
     public uint ReturnCode { get; init; }
+    public bool RestartRequired { get; init; }
+    public bool UnattendedReady { get; init; }
 }

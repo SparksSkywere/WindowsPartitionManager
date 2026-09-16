@@ -81,6 +81,131 @@ public sealed class DiskCloneService
         return Ok("Partition clone finished.");
     }
 
+    public OperationResult MovePartition(PendingOperation op, IProgress<int>? progress, CancellationToken cancellationToken)
+    {
+        var r = op.Resize ?? throw new InvalidOperationException("Resize parameters missing.");
+        var disk = op.DiskNumber;
+        var oldOffset = op.Offset;
+        var oldSize = op.Size;
+        var newOffset = r.NewOffset;
+        var newSize = r.NewSize;
+        if (oldSize == 0)
+            oldSize = newSize;
+
+        var copySize = Math.Min(oldSize, newSize);
+        copySize = copySize / (ulong)IoAlign * (ulong)IoAlign;
+        if (copySize == 0)
+            return Fail("Partition is too small to move.");
+
+        if (WindowsVolume.IsOnlineSystemVolume(r.DriveLetter, r.IsBoot))
+            return Fail(WindowsVolume.MoveBlockedLiveMessage);
+
+        _log.Info($"Move partition on disk {disk}: offset {oldOffset} → {newOffset}, size {oldSize} → {newSize}.");
+
+        SafeFileHandle? volume = null;
+        try
+        {
+            if (r.DriveLetter is char volumeLetter)
+            {
+                try
+                {
+                    volume = NativeDisk.OpenVolume(volumeLetter, write: true);
+                    if (!NativeDisk.TryLock(volume))
+                    {
+                        NativeDisk.TryDismount(volume);
+                        if (!NativeDisk.TryLock(volume))
+                            return Fail($"Cannot lock {volumeLetter}:. Close programs using that drive, then Apply again.");
+                    }
+
+                    NativeDisk.TryDismount(volume);
+                }
+                catch (Exception ex)
+                {
+                    return Fail($"Cannot lock {volumeLetter}: {ex.Message.TrimEnd('.')}.");
+                }
+            }
+
+            using var handle = NativeDisk.OpenPhysical(disk, write: true);
+            CopyRange(
+                handle,
+                handle,
+                sameDisk: true,
+                (long)oldOffset,
+                (long)newOffset,
+                (long)copySize,
+                progress,
+                0,
+                copySize,
+                cancellationToken);
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return Fail("Access denied while moving this partition.");
+        }
+        catch (Exception ex)
+        {
+            return Fail(ex.Message);
+        }
+        finally
+        {
+            if (volume is not null)
+            {
+                NativeDisk.TryUnlock(volume);
+                volume.Dispose();
+            }
+        }
+
+        var deleted = _storage.DeletePartitionAt(disk, oldOffset);
+        if (!deleted.Success)
+            return deleted;
+
+        Thread.Sleep(500);
+
+        var slice = new CloneSlice
+        {
+            Offset = oldOffset,
+            Size = oldSize,
+            GptType = r.GptType,
+            MbrType = r.MbrType,
+            Kind = r.Kind,
+            IsActive = r.IsActive,
+            IsHidden = r.IsHidden,
+            DriveLetter = r.DriveLetter,
+            FileSystem = r.FileSystem
+        };
+        var created = _storage.CreatePartitionRaw(
+            disk,
+            newOffset,
+            copySize,
+            CloneLayoutPlanner.GptTypeFor(slice),
+            CloneLayoutPlanner.MbrTypeFor(slice));
+        if (!created.Success)
+            return created;
+
+        Thread.Sleep(800);
+
+        if (newSize > copySize)
+        {
+            var grown = _storage.ResizePartition(disk, newOffset, newSize);
+            if (!grown.Success)
+                _log.Info("Move finished; extend of the partition failed: " + grown.Message);
+        }
+
+        if (r.IsActive)
+            _storage.SetActive(disk, newOffset);
+        if (r.IsHidden)
+            _storage.SetHidden(disk, newOffset, true);
+        if (r.DriveLetter is char restoredLetter)
+        {
+            var lettered = _storage.AssignDriveLetter(disk, newOffset, restoredLetter);
+            if (!lettered.Success)
+                _log.Info("Move finished; drive letter could not be restored: " + lettered.Message);
+        }
+
+        progress?.Report(100);
+        return Ok("Partition move finished.");
+    }
+
     private OperationResult CloneDiskRaw(
         CloneDiskParams p,
         IReadOnlyList<PlannedSlice> plan,
@@ -290,6 +415,12 @@ public sealed class DiskCloneService
         if (aligned <= 0)
             return;
 
+        if (sameDisk && destOffset > srcOffset && destOffset < srcOffset + aligned)
+        {
+            CopyRangeBackward(src, dest, srcOffset, destOffset, aligned, progress, already, total, cancellationToken);
+            return;
+        }
+
         using var a = new AlignedBuffer(BlockSize);
         using var b = new AlignedBuffer(BlockSize);
         var readBuf = a;
@@ -332,6 +463,35 @@ public sealed class DiskCloneService
                 NativeDisk.Read(src, srcPos, writeBuf.Span[..nextN]);
                 (readBuf, writeBuf) = (writeBuf, readBuf);
             }
+        }
+    }
+
+    private void CopyRangeBackward(
+        SafeFileHandle src,
+        SafeFileHandle dest,
+        long srcOffset,
+        long destOffset,
+        long aligned,
+        IProgress<int>? progress,
+        ulong already,
+        ulong total,
+        CancellationToken cancellationToken)
+    {
+        using var buf = new AlignedBuffer(BlockSize);
+        var remaining = aligned;
+        var srcPos = srcOffset + aligned;
+        var destPos = destOffset + aligned;
+        while (remaining > 0)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var n = (int)Math.Min(BlockSize, remaining);
+            srcPos -= n;
+            destPos -= n;
+            NativeDisk.Read(src, srcPos, buf.Span[..n]);
+            NativeDisk.Write(dest, destPos, buf.Span[..n]);
+            remaining -= n;
+            already += (ulong)n;
+            Report(progress, already, total);
         }
     }
 

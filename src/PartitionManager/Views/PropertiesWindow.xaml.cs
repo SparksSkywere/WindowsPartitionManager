@@ -18,6 +18,7 @@ public partial class PropertiesWindow : Window
         Add("File system", partition.FileSystemText);
         Add("Type", partition.TypeText);
         Add("Status", partition.StatusText);
+        Add("Encrypted", YesNo(m.IsEncrypted));
         Add("Size", partition.SizeText);
         Add("Used", partition.UsedText);
         Add("Free", partition.FreeText);
