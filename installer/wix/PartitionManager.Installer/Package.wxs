@@ -1,26 +1,17 @@
-﻿<?xml version="1.0" encoding="UTF-8"?>
-<!--
-  Windows Installer package (MSI) for Partition Manager.
-  Feature tree UI: browse install folder + Start Menu and Desktop shortcuts (on by default).
-
-  Upgrade / uninstall:
-  - Stable UpgradeCode + MajorUpgrade removes previous installs (including same version rebuilds).
-  - CloseApplication stops a running instance so files are not locked.
-  - Install folder path is written to the registry; RemoveFolderEx cleans orphans on uninstall/upgrade.
--->
+<?xml version="1.0" encoding="UTF-8"?>
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
      xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui"
      xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util">
 
   <Package Name="Partition Manager"
            Language="1033"
-           Version="1.2.0"
+           Version="1.0.0"
            Manufacturer="Skywere Industries"
-           UpgradeCode="9E2F6B14-8C71-4A5D-B3E0-1D47A9C6F8B2"
+           UpgradeCode="B7A1C4E2-6D38-4F90-9B12-5E8C0A3D7F16"
            Scope="perMachine"
            InstallerVersion="500">
 
-    <SummaryInformation Description="Manage disks and partitions on Windows (create, delete, format, resize, drive letters, MBR/GPT)."
+    <SummaryInformation Description="Manage disks and partitions on Windows (create, delete, format, resize, clone, drive letters, MBR/GPT)."
                         Manufacturer="Skywere Industries" />
 
     <MajorUpgrade DowngradeErrorMessage="A newer version of [ProductName] is already installed. Uninstall it first if you need to roll back."
@@ -29,7 +20,7 @@
 
     <MediaTemplate EmbedCab="yes" CompressionLevel="high" />
 
-    <Icon Id="AppIcon" SourceFile="..\..\..\assets\installer.ico" />
+    <Icon Id="AppIcon" SourceFile="..\..\..\assets\app.ico" />
     <Property Id="ARPPRODUCTICON" Value="AppIcon" />
     <Property Id="ARPNOMODIFY" Value="1" />
     <Property Id="WIXUI_INSTALLDIR" Value="INSTALLFOLDER" />
@@ -98,7 +89,7 @@
 
     <Component Id="AppRegistration"
                Directory="INSTALLFOLDER"
-               Guid="9E2F6B14-8C71-4A5D-B3E0-1D47A9C6F801"
+               Guid="B7A1C4E2-6D38-4F90-9B12-5E8C0A3D7F01"
                Bitness="always64">
       <RegistryValue Root="HKLM"
                      Key="Software\Skywere Industries\PartitionManager"
@@ -124,7 +115,7 @@
 
     <Component Id="AppShortcuts"
                Directory="INSTALLFOLDER"
-               Guid="9E2F6B14-8C71-4A5D-B3E0-1D47A9C6F802"
+               Guid="B7A1C4E2-6D38-4F90-9B12-5E8C0A3D7F02"
                Bitness="always64">
       <RegistryValue Root="HKLM"
                      Key="Software\Skywere Industries\PartitionManager"
@@ -153,7 +144,7 @@
 
     <Component Id="DesktopShortcutComponent"
                Directory="INSTALLFOLDER"
-               Guid="9E2F6B14-8C71-4A5D-B3E0-1D47A9C6F803"
+               Guid="B7A1C4E2-6D38-4F90-9B12-5E8C0A3D7F03"
                Bitness="always64">
       <RegistryValue Root="HKLM"
                      Key="Software\Skywere Industries\PartitionManager"

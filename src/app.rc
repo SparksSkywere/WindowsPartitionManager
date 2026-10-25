@@ -1,0 +1,176 @@
+#include <windows.h>
+#include <commctrl.h>
+#include "resource.h"
+
+IDI_APP ICON "assets\\app.ico"
+
+CREATEPROCESS_MANIFEST_RESOURCE_ID RT_MANIFEST "app.manifest"
+
+IDD_CREATE DIALOGEX 0, 0, 260, 190
+STYLE DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Create partition"
+FONT 9, "Segoe UI"
+BEGIN
+    LTEXT           "", IDC_SUMMARY, 8, 8, 244, 24
+    LTEXT           "Size (MB)", -1, 8, 36, 80, 10
+    EDITTEXT        IDC_SIZE_EDIT, 180, 34, 72, 14, ES_NUMBER
+    CONTROL         "", IDC_SIZE_SLIDER, TRACKBAR_CLASS, WS_TABSTOP, 8, 52, 244, 18
+    LTEXT           "", IDC_SIZE_HINT, 8, 72, 244, 10
+    LTEXT           "Drive letter", -1, 8, 88, 80, 10
+    COMBOBOX        IDC_LETTER, 8, 100, 80, 80, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    LTEXT           "File system", -1, 100, 88, 80, 10
+    COMBOBOX        IDC_FILESYSTEM, 100, 100, 80, 80, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    LTEXT           "Label", -1, 8, 120, 80, 10
+    EDITTEXT        IDC_LABEL, 8, 132, 172, 14, ES_AUTOHSCROLL
+    CONTROL         "Format this partition", IDC_FORMAT, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 8, 152, 120, 10
+    CONTROL         "Quick format", IDC_QUICK, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 132, 152, 80, 10
+    DEFPUSHBUTTON   "OK", IDOK, 116, 170, 60, 14
+    PUSHBUTTON      "Cancel", IDCANCEL, 184, 170, 60, 14
+END
+
+IDD_FORMAT DIALOGEX 0, 0, 240, 120
+STYLE DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Format partition"
+FONT 9, "Segoe UI"
+BEGIN
+    LTEXT           "", IDC_SUMMARY, 8, 8, 224, 20
+    LTEXT           "File system", -1, 8, 32, 80, 10
+    COMBOBOX        IDC_FILESYSTEM, 8, 44, 80, 80, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    LTEXT           "Label", -1, 8, 64, 80, 10
+    EDITTEXT        IDC_LABEL, 8, 76, 160, 14, ES_AUTOHSCROLL
+    CONTROL         "Quick format", IDC_QUICK, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 8, 96, 80, 10
+    DEFPUSHBUTTON   "OK", IDOK, 96, 100, 60, 14
+    PUSHBUTTON      "Cancel", IDCANCEL, 164, 100, 60, 14
+END
+
+IDD_RESIZE DIALOGEX 0, 0, 260, 100
+STYLE DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Resize partition"
+FONT 9, "Segoe UI"
+BEGIN
+    LTEXT           "", IDC_SUMMARY, 8, 8, 244, 20
+    LTEXT           "New size (MB)", -1, 8, 32, 80, 10
+    EDITTEXT        IDC_SIZE_EDIT, 180, 30, 72, 14, ES_NUMBER
+    CONTROL         "", IDC_SIZE_SLIDER, TRACKBAR_CLASS, WS_TABSTOP, 8, 48, 244, 18
+    LTEXT           "", IDC_SIZE_HINT, 8, 68, 244, 10
+    DEFPUSHBUTTON   "OK", IDOK, 116, 80, 60, 14
+    PUSHBUTTON      "Cancel", IDCANCEL, 184, 80, 60, 14
+END
+
+IDD_LETTER DIALOGEX 0, 0, 220, 90
+STYLE DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Change drive letter"
+FONT 9, "Segoe UI"
+BEGIN
+    LTEXT           "", IDC_SUMMARY, 8, 8, 204, 20
+    COMBOBOX        IDC_LETTER, 8, 36, 120, 80, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    DEFPUSHBUTTON   "OK", IDOK, 76, 68, 60, 14
+    PUSHBUTTON      "Cancel", IDCANCEL, 144, 68, 60, 14
+END
+
+IDD_LABEL DIALOGEX 0, 0, 220, 90
+STYLE DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Change label"
+FONT 9, "Segoe UI"
+BEGIN
+    LTEXT           "", IDC_SUMMARY, 8, 8, 204, 20
+    EDITTEXT        IDC_LABEL, 8, 36, 200, 14, ES_AUTOHSCROLL
+    DEFPUSHBUTTON   "OK", IDOK, 76, 68, 60, 14
+    PUSHBUTTON      "Cancel", IDCANCEL, 144, 68, 60, 14
+END
+
+IDD_INIT DIALOGEX 0, 0, 260, 110
+STYLE DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Initialize disk"
+FONT 9, "Segoe UI"
+BEGIN
+    LTEXT           "", IDC_SUMMARY, 8, 8, 244, 24
+    CONTROL         "GPT (recommended for disks larger than 2 TB and UEFI)", IDC_GPT, "Button", BS_AUTORADIOBUTTON | WS_GROUP | WS_TABSTOP, 8, 40, 240, 12
+    CONTROL         "MBR (legacy BIOS, 2 TB limit)", IDC_MBR, "Button", BS_AUTORADIOBUTTON | WS_TABSTOP, 8, 56, 240, 12
+    DEFPUSHBUTTON   "OK", IDOK, 116, 88, 60, 14
+    PUSHBUTTON      "Cancel", IDCANCEL, 184, 88, 60, 14
+END
+
+IDD_CLONE_DISK DIALOGEX 0, 0, 300, 210
+STYLE DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Clone disk"
+FONT 9, "Segoe UI"
+BEGIN
+    LTEXT           "", IDC_SUMMARY, 8, 8, 284, 24
+    LTEXT           "Source disk", -1, 8, 36, 80, 10
+    COMBOBOX        IDC_SOURCE, 8, 48, 284, 80, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    LTEXT           "Destination disk", -1, 8, 68, 100, 10
+    COMBOBOX        IDC_DEST, 8, 80, 284, 80, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    CONTROL         "Used data (skip free space, faster)", IDC_USED, "Button", BS_AUTORADIOBUTTON | WS_GROUP | WS_TABSTOP, 8, 104, 220, 12
+    CONTROL         "All sectors (exact copy of each partition)", IDC_ALLSEC, "Button", BS_AUTORADIOBUTTON | WS_TABSTOP, 8, 118, 240, 12
+    CONTROL         "Align partitions to 1 MB", IDC_ALIGN, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 8, 136, 180, 10
+    CONTROL         "Expand the last data partition if the destination is larger", IDC_EXPAND, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 8, 150, 280, 10
+    LTEXT           "", IDC_WARN, 8, 166, 284, 20
+    DEFPUSHBUTTON   "OK", IDOK, 156, 190, 60, 14
+    PUSHBUTTON      "Cancel", IDCANCEL, 224, 190, 60, 14
+END
+
+IDD_CLONE_PART DIALOGEX 0, 0, 300, 180
+STYLE DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Clone partition"
+FONT 9, "Segoe UI"
+BEGIN
+    LTEXT           "", IDC_SUMMARY, 8, 8, 284, 24
+    LTEXT           "Destination unallocated space", -1, 8, 36, 180, 10
+    COMBOBOX        IDC_DEST, 8, 48, 284, 80, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    CONTROL         "Used data (skip free space, faster)", IDC_USED, "Button", BS_AUTORADIOBUTTON | WS_GROUP | WS_TABSTOP, 8, 72, 220, 12
+    CONTROL         "All sectors", IDC_ALLSEC, "Button", BS_AUTORADIOBUTTON | WS_TABSTOP, 8, 86, 120, 12
+    CONTROL         "Align to 1 MB", IDC_ALIGN, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 8, 104, 120, 10
+    CONTROL         "Fill the destination region", IDC_FILL, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 8, 118, 180, 10
+    LTEXT           "", IDC_WARN, 8, 134, 284, 20
+    DEFPUSHBUTTON   "OK", IDOK, 156, 160, 60, 14
+    PUSHBUTTON      "Cancel", IDCANCEL, 224, 160, 60, 14
+END
+
+IDD_SETTINGS DIALOGEX 0, 0, 280, 188
+STYLE DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Options"
+FONT 9, "Segoe UI"
+BEGIN
+    LTEXT           "Theme", -1, 8, 8, 80, 10
+    COMBOBOX        IDC_THEME, 8, 20, 264, 120, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    CONTROL         "Refresh disks on launch", IDC_REFRESH_LAUNCH, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 8, 44, 180, 10
+    CONTROL         "Show removable disks", IDC_SHOW_REMOVABLE, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 8, 60, 180, 10
+    CONTROL         "Show virtual disks", IDC_SHOW_VIRTUAL, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 8, 76, 180, 10
+    CONTROL         "Show unallocated space", IDC_SHOW_UNALLOC, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 8, 92, 180, 10
+    CONTROL         "Show EFI / MSR partitions", IDC_SHOW_RESERVED, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 8, 108, 180, 10
+    CONTROL         "Confirm destructive operations", IDC_CONFIRM, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 8, 124, 200, 10
+    CONTROL         "Protect system partitions", IDC_PROTECT, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 8, 140, 180, 10
+    DEFPUSHBUTTON   "OK", IDOK, 116, 160, 60, 14
+    PUSHBUTTON      "Cancel", IDCANCEL, 184, 160, 60, 14
+END
+
+IDD_APPLY DIALOGEX 0, 0, 320, 200
+STYLE DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Apply pending operations"
+FONT 9, "Segoe UI"
+BEGIN
+    LTEXT           "The following operations will be committed to the live disks.", -1, 8, 8, 304, 16
+    LISTBOX         IDC_OPLIST, 8, 28, 304, 130, WS_VSCROLL | WS_BORDER
+    LTEXT           "", IDC_WARN, 8, 162, 304, 16
+    DEFPUSHBUTTON   "Apply", IDOK, 176, 180, 60, 14
+    PUSHBUTTON      "Cancel", IDCANCEL, 244, 180, 60, 14
+END
+
+IDD_PROPS DIALOGEX 0, 0, 280, 220
+STYLE DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Properties"
+FONT 9, "Segoe UI"
+BEGIN
+    LISTBOX         IDC_PROPLIST, 8, 8, 264, 186, WS_VSCROLL | WS_BORDER
+    DEFPUSHBUTTON   "Close", IDOK, 212, 200, 60, 14
+END
+
+IDD_ABOUT DIALOGEX 0, 0, 280, 140
+STYLE DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "About Partition Manager"
+FONT 9, "Segoe UI"
+BEGIN
+    LTEXT           "", IDC_SUMMARY, 8, 8, 264, 110
+    DEFPUSHBUTTON   "OK", IDOK, 212, 120, 60, 14
+END
